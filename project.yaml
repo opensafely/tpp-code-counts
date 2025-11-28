@@ -4,10 +4,10 @@ actions:
   icd10_apcs:
     run: >
       sqlrunner:latest
-        --output output/icd10-apcs.csv
-        --log-file output/icd10-apcs-log.json
-        analysis/query-icd10-apcs.sql
+        --output output/icd10_apcs.csv
+        --log-file output/icd10_apcs_log.json
+        analysis/query_icd10_apcs.sql
     outputs:
       moderately_sensitive:
-        counts: output/icd10-apcs.csv
-        log: output/icd10-apcs-log.json
+        counts: output/icd10_apcs.csv
+        log: output/icd10_apcs_log.json
