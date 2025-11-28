@@ -1,8 +1,13 @@
-version: '4.0'
+version: "4.0"
 
 actions:
-  generate_dataset:
-    run: ehrql:v1 generate-dataset analysis/dataset_definition.py --output output/dataset.csv.gz
+  icd10_apcs:
+    run: >
+      sqlrunner:latest
+        --output output/icd10-apcs.csv
+        --log-file output/icd10-apcs-log.json
+        analysis/query-icd10-apcs.sql
     outputs:
-      highly_sensitive:
-        dataset: output/dataset.csv.gz
+      moderately_sensitive:
+        counts: output/icd10-apcs.csv
+        log: output/icd10-apcs-log.json
