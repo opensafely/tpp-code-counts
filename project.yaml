@@ -11,3 +11,14 @@ actions:
       moderately_sensitive:
         counts: output/icd10_apcs.csv
         log: output/icd10_apcs_log.json
+
+  icd10_ons_deaths:
+    run: >
+      sqlrunner:latest
+        --output output/icd10_ons_deaths.csv
+        --log-file output/icd10_ons_deaths_log.json
+        analysis/query_icd10_ons_deaths.sql
+    outputs:
+      moderately_sensitive:
+        counts: output/icd10_ons_deaths.csv
+        log: output/icd10_ons_deaths_log.json
