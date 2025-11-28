@@ -22,3 +22,12 @@ actions:
       moderately_sensitive:
         counts: output/icd10_ons_deaths.csv
         log: output/icd10_ons_deaths_log.json
+
+  validate_output:
+    run: python:latest python analysis/validate_output.py
+    needs:
+      - icd10_apcs
+      - icd10_ons_deaths
+    outputs:
+      moderately_sensitive:
+        report: output/validation_report.txt
