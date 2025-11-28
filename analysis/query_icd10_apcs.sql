@@ -6,25 +6,37 @@
 --   - We assume spaces may vary
 -- Grouped by financial year, counts rounded to nearest 10 (or "<15" if 1-14)
 -- Excludes patients with Type 1 opt-out
+--
+-- Note: Uses XML-based string splitting for SQL Server compatibility level 100
+-- (STRING_SPLIT requires compatibility level 130+ which TPP doesn't use)
 
-WITH spell_codes AS (
-    -- Extract all codes from each spell, removing duplicates per spell
-    SELECT DISTINCT
-        APCS.APCS_Ident,
-        APCS.Der_Financial_Year,
-        LTRIM(RTRIM(code.value)) AS icd10_code
+WITH apcs_filtered AS (
+    -- Pre-filter APCS records excluding Type 1 opt-outs
+    SELECT 
+        APCS_Ident,
+        Der_Financial_Year,
+        -- Normalize: replace || with comma, remove spaces
+        REPLACE(REPLACE(Der_Diagnosis_All, '||', ','), ' ', '') AS normalized_codes
     FROM APCS
-    CROSS APPLY STRING_SPLIT(
-        -- Replace episode delimiters with commas to create uniform comma-separated list
-        REPLACE(REPLACE(Der_Diagnosis_All, '||', ','), ' ', ''),
-        ','
-    ) AS code
-    WHERE LTRIM(RTRIM(code.value)) <> ''
-      AND Der_Diagnosis_All IS NOT NULL
+    WHERE Der_Diagnosis_All IS NOT NULL
       AND NOT EXISTS (
           SELECT 1 FROM PatientsWithTypeOneDissent p 
           WHERE p.Patient_ID = APCS.Patient_ID
       )
+),
+spell_codes AS (
+    -- Extract all codes from each spell using XML-based string splitting
+    -- This approach is compatible with SQL Server 2008+ (compatibility level 100)
+    SELECT DISTINCT
+        a.APCS_Ident,
+        a.Der_Financial_Year,
+        LTRIM(RTRIM(split.code.value('.', 'VARCHAR(20)'))) AS icd10_code
+    FROM apcs_filtered a
+    CROSS APPLY (
+        SELECT CAST('<x>' + REPLACE(a.normalized_codes, ',', '</x><x>') + '</x>' AS XML) AS xml_codes
+    ) AS xml_data
+    CROSS APPLY xml_data.xml_codes.nodes('/x') AS split(code)
+    WHERE LTRIM(RTRIM(split.code.value('.', 'VARCHAR(20)'))) <> ''
 ),
 code_counts AS (
     -- Count spells per code per financial year
