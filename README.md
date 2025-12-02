@@ -2,7 +2,7 @@
 
 Produces reports on the frequency of clinical codes in the TPP backend of OpenSAFELY to assist with the development of codelists and [the OpenCodelists application](https://www.opencodelists.org/).
 
-[View on OpenSAFELY](https://jobs.opensafely.org/repo/https%253A%252F%252Fgithub.com%252Fopensafely%252Ftpp-code-counts)
+[View on OpenSAFELY](https://jobs.opensafely.org/opensafely-internal/tpp-code-counts/)
 
 Details of the purpose and any published outputs from this project can be found at the link above.
 
