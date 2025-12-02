@@ -11,12 +11,13 @@ Produces a short report with findings.
 import csv
 import re
 
+
 # Valid ICD10 code patterns:
 # - A00 (3 chars)
 # - A00.0 or A00.X (5 chars with dot)
 # - A000 or A00X (4 chars without dot)
-# - A00.00 or A00.0X (6 chars with dot)
-# - A0000 or A000X (5 chars without dot)
+# - A00.00 or A00.X0 (6 chars with dot)
+# - A0000 or A00X0 (5 chars without dot)
 ICD10_PATTERN = re.compile(r"^[A-Z][0-9]{2}\.?[0-9X]?[0-9]?$")
 
 # Valid financial year patterns:
