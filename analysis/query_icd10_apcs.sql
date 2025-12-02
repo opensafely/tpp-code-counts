@@ -21,7 +21,7 @@ WITH apcs_base AS (
         apcs.APCS_Ident,
         apcs.Der_Financial_Year,
         LTRIM(RTRIM(der.Spell_Primary_Diagnosis)) as primary_diagnosis,
-        LTRIM(RTRIM(der.Spell_Secondary_Diagnoses)) as secondary_diagnoses,
+        LTRIM(RTRIM(der.Spell_Secondary_Diagnosis)) as secondary_diagnosis,
         -- Normalize: replace || with comma, remove spaces
         REPLACE(REPLACE(apcs.Der_Diagnosis_All, '||', ','), ' ', '') AS normalized_codes
     FROM APCS as apcs
@@ -62,10 +62,10 @@ secondary_codes AS (
     SELECT DISTINCT
         APCS_Ident,
         Der_Financial_Year,
-        secondary_diagnoses AS icd10_code
+        secondary_diagnosis AS icd10_code
     FROM apcs_base
-    WHERE secondary_diagnoses IS NOT NULL
-      AND secondary_diagnoses <> ''
+    WHERE secondary_diagnosis IS NOT NULL
+      AND secondary_diagnosis <> ''
 ),
 -- Get all unique codes from either source
 all_unique_codes AS (
