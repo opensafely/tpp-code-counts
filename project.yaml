@@ -31,3 +31,5 @@ actions:
     outputs:
       moderately_sensitive:
         report: output/validation_report.txt
+        apcs_files: output/icd10_apcs_*.csv
+        ons_files: output/icd10_ons_deaths_*.csv
