@@ -10,3 +10,11 @@ venv/
 .Rhistory
 .Rproj.user/
 .devcontainer/ehrql-main/
+
+.coverage*
+.pytest-cache/
+.venv/
+__pycache__
+htmlcov
+.env
+.test.env
