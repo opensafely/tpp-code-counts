@@ -19,7 +19,14 @@ WITH apcs_base AS (
     -- Base APCS records excluding Type 1 opt-outs
     SELECT
         apcs.APCS_Ident,
-        apcs.Der_Financial_Year,
+        -- Normalize Der_Financial_Year to canonical form YYYY-YY
+        CASE 
+            WHEN apcs.Der_Financial_Year IS NULL OR LTRIM(RTRIM(apcs.Der_Financial_Year)) = '' THEN NULL
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN LTRIM(RTRIM(apcs.Der_Financial_Year))
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9]/[0-9][0-9]' THEN REPLACE(LTRIM(RTRIM(apcs.Der_Financial_Year)), '/', '-')
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9][0-9][0-9]' THEN SUBSTRING(LTRIM(RTRIM(apcs.Der_Financial_Year)),1,4) + '-' + SUBSTRING(LTRIM(RTRIM(apcs.Der_Financial_Year)),5,2)
+            ELSE LTRIM(RTRIM(apcs.Der_Financial_Year))
+        END AS Der_Financial_Year,
         LTRIM(RTRIM(der.Spell_Primary_Diagnosis)) as primary_diagnosis,
         LTRIM(RTRIM(der.Spell_Secondary_Diagnosis)) as secondary_diagnosis,
         -- Normalize: replace || with comma, remove spaces
