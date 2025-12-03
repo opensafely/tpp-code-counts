@@ -38,31 +38,25 @@ def is_valid(value, pattern):
 
 
 def validate_file(filepath):
-    """Validate a CSV file, returning sets of invalid values plus stats."""
-    invalid_icd10 = set()
+    """Validate a CSV file, returning stats."""
     invalid_fy = set()
     row_count = 0
-    missing = False
 
     try:
         with open(filepath) as f:
             for row in csv.DictReader(f):
                 row_count += 1
-                code = row.get("icd10_code", "")
                 fy = row.get("financial_year", "")
 
-                if not is_valid(code, ICD10_PATTERN):
-                    invalid_icd10.add(code.strip())
                 if not is_valid(fy, FY_PATTERN):
                     invalid_fy.add(fy.strip())
 
         # Get file size in bytes
         file_size_bytes = Path(filepath).stat().st_size
     except FileNotFoundError:
-        missing = True
         file_size_bytes = 0
 
-    return invalid_icd10, invalid_fy, row_count, file_size_bytes, missing
+    return invalid_fy, row_count, file_size_bytes
 
 
 def format_bullet_list(items):
@@ -77,6 +71,52 @@ def format_markdown_bullet_list(items):
     return "\n" + "\n".join(f"- `{item}`" for item in sorted(items))
 
 
+def write_partitioned_csv(header: list, outfile_base: str, rows: list):
+    """Write `rows` (list of dict) to CSV(s) with header.
+
+    outfile_base is a string representing the desired filename
+    for a single file. If the total row count including header would be >= 5000
+    then the output will be partitioned into files of at most 4,990 rows
+    (including header) to stay safely under the 5,000-row threshold.
+
+    Returns a list of tuples: [(filepath, data_rows_written), ...].
+    """
+    # Threshold behaviour
+    MAX_TOTAL_ROWS = 5000
+    MAX_TOTAL_ROWS_SAFE = MAX_TOTAL_ROWS - 10  # leave some margin
+
+    total_rows_including_header = len(rows) + 1
+    if total_rows_including_header < MAX_TOTAL_ROWS:
+        # single file
+        out_file = Path("output") / f"{outfile_base}.csv"
+        with open(out_file, "w", newline="") as wf:
+            writer = csv.DictWriter(wf, fieldnames=header)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        return [(str(out_file), len(rows))]
+
+    # Partition into chunks of MAX_TOTAL_ROWS_SAFErows
+    created = []
+    current_start = 1  # original-file row number for header is 1
+    for i in range(0, len(rows), MAX_TOTAL_ROWS_SAFE):
+        chunk = rows[i : i + MAX_TOTAL_ROWS_SAFE]
+        chunk_len = len(chunk)
+        chunk_start = current_start
+        chunk_end = current_start + chunk_len
+        suffix = f"_rows_{chunk_start:04d}_{chunk_end:04d}"
+        partition_path = Path("output") / f"{outfile_base}{suffix}.csv"
+        with open(partition_path, "w", newline="") as wf:
+            writer = csv.DictWriter(wf, fieldnames=header)
+            writer.writeheader()
+            for row in chunk:
+                writer.writerow(row)
+        created.append((str(partition_path), chunk_len))
+        current_start = chunk_end + 1
+
+    return created
+
+
 def write_invalid_icd10_rows(input_path: str, source: str):
     """Write rows with invalid ICD10 codes from input CSV to a new CSV.
 
@@ -84,25 +124,24 @@ def write_invalid_icd10_rows(input_path: str, source: str):
     Returns filepath and number of rows written.
     """
     p = Path(input_path)
-    outfile = Path("output") / f"icd10_{source}_invalid_rows.csv"
     if not p.exists():
-        return str(outfile), 0
+        return []
 
     with open(p) as f:
         reader = csv.DictReader(f)
         header = reader.fieldnames or []
-        rows_written = 0
-        outfile.parent.mkdir(parents=True, exist_ok=True)
-        with open(outfile, "w", newline="") as wf:
-            writer = csv.DictWriter(wf, fieldnames=header)
-            writer.writeheader()
-            for row in reader:
-                code = row.get("icd10_code", "")
-                if not is_valid(code, ICD10_PATTERN):
-                    writer.writerow(row)
-                    rows_written += 1
+        rows = [
+            row
+            for row in reader
+            if not is_valid(row.get("icd10_code", ""), ICD10_PATTERN)
+        ]
 
-    return str(outfile), rows_written
+    if not rows:
+        return []
+
+    # Use partitioned writer
+    created = write_partitioned_csv(header, f"icd10_{source}_invalid_rows", rows)
+    return created
 
 
 def format_size(bytes_count: int) -> str:
@@ -162,10 +201,9 @@ def split_by_financial_year(input_path: str, source: str):
     # Write out one CSV file per slug, removing 'financial_year' column
     for slug, rows in rows_by_slug.items():
         if slug == "unknown":
-            outfile = Path("output") / f"icd10_{source}_unknown_financial_year.csv"
+            outfile_base = f"icd10_{source}_unknown_financial_year"
         else:
-            outfile = Path("output") / f"icd10_{source}_{slug}.csv"
-        outfile.parent.mkdir(parents=True, exist_ok=True)
+            outfile_base = f"icd10_{source}_{slug}"
         # derive header; keep 'financial_year' for the unknown slug
         if slug == "unknown":
             out_header = list(header)
@@ -174,40 +212,37 @@ def split_by_financial_year(input_path: str, source: str):
         # If header is empty (some broken files), fall back to keys of first row
         if not out_header and rows:
             out_header = [k for k in rows[0].keys() if k != "financial_year"]
-        with open(outfile, "w", newline="") as wf:
-            writer = csv.DictWriter(wf, fieldnames=out_header)
-            writer.writeheader()
-            for row in rows:
-                if slug == "unknown":
-                    # Ensure the raw financial year is present in the 'financial_year' column.
-                    raw_fy = (row.get("financial_year") or "").strip()
-                    out_row = dict(row)
-                    out_row["financial_year"] = raw_fy
-                else:
-                    out_row = {k: v for k, v in row.items() if k != "financial_year"}
-                writer.writerow(out_row)
-        created.append((str(outfile), len(rows)))
+
+        # Build output rows according to whether we keep financial_year
+        out_rows = []
+        for row in rows:
+            if slug == "unknown":
+                raw_fy = (row.get("financial_year") or "").strip()
+                out_row = dict(row)
+                out_row["financial_year"] = raw_fy
+            else:
+                out_row = {k: v for k, v in row.items() if k != "financial_year"}
+            out_rows.append(out_row)
+
+        # Write files (partitioned if necessary)
+        created_files = write_partitioned_csv(out_header, outfile_base, out_rows)
+        for fpath, rows_written in created_files:
+            created.append((fpath, rows_written))
 
     return created
 
 
 def main():
-    apcs_icd10, apcs_fy, apcs_rows, apcs_size_bytes, apcs_missing = validate_file(
-        "output/icd10_apcs.csv"
-    )
-    ons_icd10, ons_fy, ons_rows, ons_size_bytes, ons_missing = validate_file(
-        "output/icd10_ons_deaths.csv"
-    )
+    apcs_fy, apcs_rows, apcs_size_bytes = validate_file("output/icd10_apcs.csv")
+    ons_fy, ons_rows, ons_size_bytes = validate_file("output/icd10_ons_deaths.csv")
 
     # Split files per financial year and record created files/collisions
     apcs_created = split_by_financial_year("output/icd10_apcs.csv", "apcs")
     ons_created = split_by_financial_year("output/icd10_ons_deaths.csv", "ons_deaths")
 
     # Write invalid rows files
-    apcs_invalid_path, apcs_invalid_rows = write_invalid_icd10_rows(
-        "output/icd10_apcs.csv", "apcs"
-    )
-    ons_invalid_path, ons_invalid_rows = write_invalid_icd10_rows(
+    invalid_apcs_files = write_invalid_icd10_rows("output/icd10_apcs.csv", "apcs")
+    invalid_ons_files = write_invalid_icd10_rows(
         "output/icd10_ons_deaths.csv", "ons_deaths"
     )
 
@@ -219,14 +254,14 @@ def main():
         "HES APCS:",
         f"  File size: {format_size(apcs_size_bytes)}",
         f"  Rows: {apcs_rows:,}",
-        f"  Invalid rows (invalid ICD10) file: {apcs_invalid_path} ({apcs_invalid_rows:,} rows)",
         f"  Invalid financial years: {format_bullet_list(apcs_fy)}",
+        f"  Files created: {format_bullet_list([f for f, _ in apcs_created + invalid_apcs_files])}",
         "",
         "ONS Deaths:",
         f"  File size: {format_size(ons_size_bytes)}",
         f"  Rows: {ons_rows:,}",
-        f"  Invalid rows (invalid ICD10) file: {ons_invalid_path} ({ons_invalid_rows:,} rows)",
         f"  Invalid financial years: {format_bullet_list(ons_fy)}",
+        f"  Files created: {format_bullet_list([f for f, _ in ons_created + invalid_ons_files])}",
         "",
     ]
 
