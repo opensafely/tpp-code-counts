@@ -149,11 +149,11 @@ def find_missing_and_unused_codes():
     for code in missing_from_ocl:
         missing_code_count_dict[code] = usage[code]
 
-    return missing_code_count_dict, unused_in_practice, process_error
+    return missing_code_count_dict, unused_in_practice, usage, process_error
 
 
 def main():
-    missing_from_ocl, unused_in_practice, process_error = (
+    missing_from_ocl, unused_in_practice, usage, process_error = (
         find_missing_and_unused_codes()
     )
 
@@ -171,6 +171,34 @@ def main():
             "**This report was generated using local test data from `output/` because the remote ZIP could not be downloaded.**\n\n"
             f"Remote download error: {process_error}\n\n"
         )
+
+    # Write combined usage single file
+    with open(OUT_DIR / "code_usage_combined.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "icd10_code",
+                "financial_year",
+                "apcs_primary_count",
+                "apcs_secondary_count",
+                "apcs_all_count",
+                "ons_primary_count",
+                "ons_contributing_count",
+            ]
+        )
+        for code in sorted(usage):
+            for financial_year, counts in usage[code].items():
+                writer.writerow(
+                    [
+                        code,
+                        financial_year,
+                        counts.get("apcs_primary_count", "0"),
+                        counts.get("apcs_secondary_count", "0"),
+                        counts.get("apcs_all_count", "0"),
+                        counts.get("ons_primary_count", "0"),
+                        counts.get("ons_contributing_count", "0"),
+                    ]
+                )
 
     # Write unused codes CSV
     with open(OUT_DIR / "unused_codes.csv", "w", newline="") as f:
