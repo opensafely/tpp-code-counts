@@ -90,6 +90,46 @@ def setup_ons_deaths_table(conn):
         make_row(120, "2025-02-01", "E7801", ["E119", "E780"], 68, "M"),
         make_row(121, "2025-02-20", "I251", ["E119", "I10", "J449"], 82, "F"),
         make_row(122, "2025-03-05", "J449", ["E119", "I251"], 74, "M"),
+        # 5-character codes that are NOT in OCL but are descendants of codes in codelists
+        # E119 is in diabetes codelists, add E1190, E1191, E1192 as primary cause
+        make_row(123, "2024-04-22", "E1190", ["I10"], 76, "M"),
+        make_row(124, "2024-05-18", "E1191", ["E119", "I10"], 79, "F"),
+        make_row(125, "2024-06-22", "E1192", [], 81, "M"),
+        make_row(126, "2024-07-28", "E1190", ["I10", "E780"], 74, "F"),
+        make_row(127, "2024-08-22", "E1191", ["E119"], 77, "M"),
+        make_row(128, "2024-09-28", "E1192", ["I10"], 80, "F"),
+        make_row(129, "2024-10-22", "E1190", ["E119", "I10"], 75, "M"),
+        make_row(130, "2024-11-28", "E1191", ["J449", "E780"], 78, "F"),
+        make_row(131, "2024-12-22", "E1192", ["I10", "E119"], 82, "M"),
+        make_row(132, "2025-01-28", "E1190", ["E119"], 79, "F"),
+        make_row(133, "2025-02-22", "E1191", ["I10"], 76, "M"),
+        make_row(134, "2025-03-28", "E1192", ["E119", "E780"], 80, "F"),
+        # E119 codes as contributing causes
+        make_row(135, "2024-05-05", "I251", ["E1190", "I10"], 73, "M"),
+        make_row(136, "2024-06-08", "C349", ["E1191"], 70, "F"),
+        make_row(137, "2024-07-12", "I251", ["E1192", "E1190"], 77, "M"),
+        make_row(138, "2024-08-16", "J449", ["E1191", "I10"], 75, "F"),
+        make_row(139, "2024-09-22", "I251", ["E1190", "E1192"], 79, "M"),
+        make_row(140, "2024-10-26", "C349", ["E1191", "E119"], 71, "F"),
+        make_row(141, "2024-11-22", "I251", ["E1192", "I10"], 78, "M"),
+        make_row(142, "2024-12-26", "J449", ["E1190", "E1191"], 76, "F"),
+        make_row(143, "2025-01-22", "I251", ["E1192"], 80, "M"),
+        make_row(144, "2025-02-26", "C349", ["E1190", "E119"], 72, "F"),
+        make_row(145, "2025-03-22", "I251", ["E1191", "I10"], 77, "M"),
+        # I10 descendants as primary - I100, I101
+        make_row(146, "2024-04-28", "I100", ["E119", "J449"], 78, "M"),
+        make_row(147, "2024-06-18", "I101", ["E119"], 75, "F"),
+        make_row(148, "2024-08-28", "I100", ["J449", "E780"], 79, "M"),
+        make_row(149, "2024-10-18", "I101", ["E119", "I10"], 76, "F"),
+        make_row(150, "2024-12-28", "I100", ["E119"], 80, "M"),
+        make_row(151, "2025-02-28", "I101", ["J449", "E119"], 77, "F"),
+        # I10 descendants as contributing
+        make_row(152, "2024-05-12", "I251", ["I100", "E119"], 74, "M"),
+        make_row(153, "2024-07-22", "C349", ["I101"], 71, "F"),
+        make_row(154, "2024-09-12", "I251", ["I100", "E119"], 78, "M"),
+        make_row(155, "2024-11-22", "J449", ["I101", "E119"], 75, "F"),
+        make_row(156, "2025-01-12", "I251", ["I100"], 79, "M"),
+        make_row(157, "2025-03-12", "C349", ["I101", "E119"], 72, "F"),
         # Previous financial year
         make_row(201, "2023-04-15", "I251", ["E119", "I10"], 76, "M"),
         make_row(202, "2023-06-20", "J449", ["E780", "E119"], 80, "F"),
@@ -182,14 +222,14 @@ def test_i251_primary_cause_count(ons_deaths_results):
     """I251 is primary cause in many deaths, should be >= 15 and rounded."""
     result = ons_deaths_results[("2024-25", "I251")]
     # 17 patients with I251 as primary cause (excluding opted-out and duplicates)
-    assert result["primary"] == "20"
+    assert result["primary"] == "30"
 
 
 def test_e119_contributing_cause_count(ons_deaths_results):
     """E119 appears as contributing cause in many deaths."""
     result = ons_deaths_results[("2024-25", "E119")]
     # E119 appears as contributing cause in most deaths
-    assert result["contributing"] == "30"
+    assert result["contributing"] == "40"
 
 
 def test_e119_primary_cause_count(ons_deaths_results):
@@ -202,7 +242,7 @@ def test_i10_only_contributing(ons_deaths_results):
     """I10 only appears as contributing cause, never primary."""
     result = ons_deaths_results[("2024-25", "I10")]
     assert result["primary"] == "0"
-    assert result["contributing"] == "20"
+    assert result["contributing"] == "30"
 
 
 def test_small_counts_show_less_than_15(ons_deaths_results):
