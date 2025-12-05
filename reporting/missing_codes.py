@@ -21,7 +21,9 @@ OUT_DIR = REPO_ROOT / "reporting" / "outputs"
 OCL_ICD10_2019_CODES_FILE = DATA_DIR / "ocl_icd10_codes.txt"
 
 # Precompiled regexes used by multiple functions
-FILENAME_RE = re.compile(r"icd10_(apcs|ons_deaths)_[0-9]{4}_[0-9]{2}.*\.csv")
+FILENAME_RE = re.compile(
+    r"(?:output/)?icd10_(apcs|ons_deaths)_[0-9]{4}_[0-9]{2}.*\.csv"
+)
 FY_RE = re.compile(r"_(\d{4}_\d{2})")
 
 
@@ -31,7 +33,7 @@ def load_ocl_codes() -> set:
     with open(OCL_ICD10_2019_CODES_FILE) as f:
         for line in f:
             code = line.strip()
-            if code:
+            if code and "-" not in code:  # ocl contains code ranges which we'll ignore
                 ocl_codes.add(code)
 
     # Should be at least 12,000
@@ -47,6 +49,7 @@ def load_ocl_codes() -> set:
 
 # In dev mode load the code usage from local files
 LOCAL_USAGE_OUTPUT_DIR = REPO_ROOT / "output"
+LOCAL_DATA_ZIP = DATA_DIR / "code_usage.zip"
 
 
 def fy_from_filename(name: str) -> str:
@@ -84,17 +87,20 @@ def process_csv(reader, name, usage):
 def load_code_usage_data():
     """Load all ICD10 codes and counts from the output files.
 
-    Tries to download the remote ZIP file, if that fails falls
-    back to local files produced by running the tests
+    Tries to load from (in order):
+    1. Remote ZIP file from jobs.opensafely.org
+    2. Local ZIP file in reporting/data/ folder
+    3. Local CSV files in output/ folder (from running tests)
 
     Returns a mapping: code -> { financial_year -> { counts } }
     """
     usage = defaultdict(lambda: defaultdict(dict))
 
-    # Attempt to download zip from remote
-    remote_url = "https://jobs.opensafely.org/opensafely-internal/tpp-code-counts/outputs/latest/download/"
     csvs = None
     process_error = None
+
+    # Strategy 1: Try to download zip from remote
+    remote_url = "https://jobs.opensafely.org/opensafely-internal/tpp-code-counts/outputs/latest/download/"
     try:
         with urllib.request.urlopen(remote_url, timeout=20) as resp:
             data = resp.read()
@@ -104,10 +110,27 @@ def load_code_usage_data():
         if names:
             csvs = (data, names)
         else:
-            process_error = f"No CSV files found in zip file from {remote_url}"
+            process_error = f"No CSV files found in remote zip from {remote_url}"
     except Exception as e:
-        process_error = str(e)
+        process_error = f"Could not download from {remote_url}: {str(e)}"
 
+    # Strategy 2: If remote failed, try local ZIP in reporting/data/
+    if not csvs and LOCAL_DATA_ZIP.exists():
+        try:
+            with open(LOCAL_DATA_ZIP, "rb") as f:
+                data = f.read()
+            buf = io.BytesIO(data)
+            with zipfile.ZipFile(buf) as z:
+                names = [n for n in z.namelist() if n.endswith(".csv")]
+            if names:
+                csvs = (data, names)
+                process_error = None  # Clear error since we found a source
+            else:
+                process_error = f"No CSV files found in local zip {LOCAL_DATA_ZIP}"
+        except Exception as e:
+            process_error = f"Could not read local zip {LOCAL_DATA_ZIP}: {str(e)}"
+
+    # Process ZIP files (remote or local)
     if csvs:
         data, names = csvs
         buf = io.BytesIO(data)
@@ -142,13 +165,49 @@ def find_missing_and_unused_codes():
     all_used_codes = set(usage.keys())
 
     missing_from_ocl = all_used_codes - ocl_codes
-    unused_in_practice = ocl_codes - all_used_codes
+
+    # Find all 3 character ICD10 codes in OCL with no children for 'X' suffixing
+    three_char_codes_with_no_children = set()
+    for code in ocl_codes:
+        if len(code) != 3:
+            continue
+        has_children = any(
+            other_code.startswith(code) and len(other_code) > 3
+            for other_code in ocl_codes
+        )
+        if not has_children:
+            three_char_codes_with_no_children.add(code)
+
+    truly_missing = set()
+    for code in missing_from_ocl:
+        # Check if this code is a 4+ character code that starts with a 3-char code
+        is_covered = False
+        if len(code) == 4 and code.endswith("X"):
+            prefix = code[:3]
+            if prefix in three_char_codes_with_no_children:
+                is_covered = True
+
+        if not is_covered:
+            truly_missing.add(code)
 
     # Get counts for missing codes
     missing_code_count_dict = {}
-    for code in missing_from_ocl:
+    for code in truly_missing:
         missing_code_count_dict[code] = usage[code]
 
+    # unused codes are those in OCL but not in usage
+    # but taking into acount 3-char codes with no children matching 4-char usage
+    unused_in_practice = set()
+    for code in ocl_codes:
+        if code not in all_used_codes:
+            # Check for 3-char codes with no children
+            if len(code) == 3 and code in three_char_codes_with_no_children:
+                # See if any 4-char usage codes start with this 3-char code
+                has_usage = any(used_code == f"{code}X" for used_code in all_used_codes)
+                if not has_usage:
+                    unused_in_practice.add(code)
+            else:
+                unused_in_practice.add(code)
     return missing_code_count_dict, unused_in_practice, usage, process_error
 
 
@@ -159,6 +218,10 @@ def main():
 
     # Ensure output directory exists
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Initialize warning messages
+    csv_warning = ""
+    md_warning = ""
 
     if process_error:
         csv_warning = (
