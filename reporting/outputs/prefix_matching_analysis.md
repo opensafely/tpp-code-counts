@@ -8,11 +8,12 @@ ICD10 codes appear in the admitted patient care spells (APCS) table in three fie
 
 ## Overall Summary
 
-- Total codelists analyzed: 86
+- Total codelists analyzed: 93
 - Builder codelists: 55
 - Uploaded codelists: 31
+- Inline codelists: 7
 
-A 'builder' codelist is one created using the OpenCodelists builder tool, whereas an 'uploaded' codelist is one uploaded directly by a user. They are reported separately in places because in the builder, children of included codes get automatically included (unless explicitly excluded), whereas in uploaded codelists they are deliberately excluded.
+A 'builder' codelist is one created using the OpenCodelists builder tool, whereas an 'uploaded' codelist is one uploaded directly by a user. 'Inline' codelists are hardcoded values in analysis code. They are reported separately in places because in the builder, children of included codes get automatically included (unless explicitly excluded), whereas in uploaded and inline codelists they are deliberately excluded.
 
 ## Primary diagnosis field
 
@@ -32,16 +33,16 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 1,839,160 | - | - |
-| Strict | 2,196,880 | +357,720 | +19.45% |
-| Partial | 2,203,250 | +364,090 | +19.80% |
+| Baseline | 2,122,780 | - | - |
+| Strict | 2,480,500 | +357,720 | +16.85% |
+| Partial | 2,486,870 | +364,090 | +17.15% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 59/86 (68.6%) | 41/55 (74.5%) | 18/31 (58.1%) |
-| Partial vs Baseline | 53/86 (61.6%) | 36/55 (65.5%) | 17/31 (54.8%) |
+| Strict vs Baseline | 66/93 (71.0%) | 41/55 (74.5%) | 18/31 (58.1%) |
+| Partial vs Baseline | 60/93 (64.5%) | 36/55 (65.5%) | 17/31 (54.8%) |
 
 
 ### By Creation Method
@@ -71,22 +72,37 @@ For our analysis we report:
 | Lax vs Baseline | 1/31 (3.2%) | - | 1/31 (3.2%) |
 
 
+#### Inline Codelists
+
+| Scenario | Total Events | Difference from Baseline | % Increase |
+|----------|-------------:|-------------------------:|-----------:|
+| Baseline | 283,620 | - | - |
+| Strict | 283,620 | +0 | +0.00% |
+| Partial | 283,620 | +0 | +0.00% |
+| Lax | 283,620 | +0 | +0.00% |
+
+| Comparison | All Codelists | Builder | Uploaded |
+|------------|--------------|---------|----------|
+| Strict vs Baseline | 7/7 (100.0%) | - | 7/7 (100.0%) |
+| Partial vs Baseline | 7/7 (100.0%) | - | 7/7 (100.0%) |
+
+
 ## Secondary Diagnosis Field
 
 This field is exactly the same as the primary diagnosis field so we just repeat the above analysis here.
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 2,211,430 | - | - |
-| Strict | 2,688,030 | +476,600 | +21.55% |
-| Partial | 2,715,600 | +504,170 | +22.80% |
+| Baseline | 2,448,080 | - | - |
+| Strict | 2,924,680 | +476,600 | +19.47% |
+| Partial | 2,952,250 | +504,170 | +20.59% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 58/86 (67.4%) | 40/55 (72.7%) | 18/31 (58.1%) |
-| Partial vs Baseline | 51/86 (59.3%) | 35/55 (63.6%) | 16/31 (51.6%) |
+| Strict vs Baseline | 65/93 (69.9%) | 40/55 (72.7%) | 18/31 (58.1%) |
+| Partial vs Baseline | 58/93 (62.4%) | 35/55 (63.6%) | 16/31 (51.6%) |
 
 
 ### By Creation Method
@@ -116,6 +132,21 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 | Lax vs Baseline | 2/31 (6.5%) | - | 2/31 (6.5%) |
 
 
+#### Inline Codelists
+
+| Scenario | Total Events | Difference from Baseline | % Increase |
+|----------|-------------:|-------------------------:|-----------:|
+| Baseline | 236,650 | - | - |
+| Strict | 236,650 | +0 | +0.00% |
+| Partial | 236,650 | +0 | +0.00% |
+| Lax | 236,650 | +0 | +0.00% |
+
+| Comparison | All Codelists | Builder | Uploaded |
+|------------|--------------|---------|----------|
+| Strict vs Baseline | 7/7 (100.0%) | - | 7/7 (100.0%) |
+| Partial vs Baseline | 7/7 (100.0%) | - | 7/7 (100.0%) |
+
+
 ## All Diagnosis Field
 
 This field contains all ICD10 codes recorded during a patient spell in hospital. It contains a concatenated list of ICD10 codes. The codes are usually in the same format as those in the primary and secondary diagnosis fields (i.e., 4 or 5 characters, with 3 character codes padded with an X). However, the field doesn't seem to have as much validation and so you do get exceptions e.g. 3 character codes without the X padding. However, these are always below the 15 usage threshold so we ignore them in this analysis.
@@ -130,14 +161,14 @@ For our analysis we report:
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 15,079,260 | - | - |
-| With PARTIAL descendants (prefix matching) | 15,359,830 | +280,570 | +1.86% |
+| Baseline (codelist codes only) | 16,619,920 | - | - |
+| With PARTIAL descendants (prefix matching) | 16,900,490 | +280,570 | +1.69% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| PARTIAL descendants vs Baseline | 72/86 (83.7%) | 45/55 (81.8%) | 27/31 (87.1%) |
+| PARTIAL descendants vs Baseline | 79/93 (84.9%) | 45/55 (81.8%) | 27/31 (87.1%) |
 
 
 ### By Creation Method
