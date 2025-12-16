@@ -36,8 +36,9 @@ OUTPUT_DIR = Path(__file__).parent.parent / "output"
 
 
 def setup_apcs_table(conn):
-    """Create and populate the APCS test table."""
+    """Create and populate the APCS test tables (current and archived)."""
     drop_table_if_exists(conn, "APCS")
+    drop_table_if_exists(conn, "APCS_ARCHIVED")
 
     execute_sql(
         conn,
@@ -48,6 +49,23 @@ def setup_apcs_table(conn):
             Admission_Date DATE,
             Discharge_Date DATE,
             Der_Financial_Year VARCHAR(7),
+            Der_Activity_Month VARCHAR(6),
+            Der_Diagnosis_All VARCHAR(4000),
+            Der_Diagnosis_Count INT
+        )
+    """,
+    )
+
+    execute_sql(
+        conn,
+        """
+        CREATE TABLE APCS_ARCHIVED (
+            APCS_Ident BIGINT PRIMARY KEY,
+            Patient_ID BIGINT NOT NULL,
+            Admission_Date DATE,
+            Discharge_Date DATE,
+            Der_Financial_Year VARCHAR(7),
+            Der_Activity_Month VARCHAR(6),
             Der_Diagnosis_All VARCHAR(4000),
             Der_Diagnosis_Count INT
         )
@@ -185,12 +203,18 @@ def setup_apcs_table(conn):
         (115, 215, "2024-12-12", "2024-12-14", "2024-25", "||I8020 ,E119", 2),
         (116, 216, "2025-01-12", "2025-01-14", "2024-25", "||I8010", 1),
         (117, 217, "2025-02-12", "2025-02-14", "2024-25", "||I8020", 1),
+        # ARCHIVED data
+        (13, 201, "2023-04-10", "2023-04-15", "2022-23", "||E119 ,I10", 2),
+        (14, 202, "2023-06-20", "2023-06-25", "2022-23", "||J449 ,E780", 2),
+        (15, 203, "2023-09-15", "2023-09-18", "2022-23", "||E119||K219", 2),
+        (16, 204, "2023-12-01", "2023-12-05", "2022-23", "||N179 ,I801", 2),
+        (17, 205, "2024-02-20", "2024-02-25", "2022-23", "||E119 ,E780 ,J449", 3),
         # Previous financial year data
-        (13, 201, "2023-04-10", "2023-04-15", "2023-24", "||E119 ,I10", 2),
-        (14, 202, "2023-06-20", "2023-06-25", "2023-24", "||J449 ,E780", 2),
-        (15, 203, "2023-09-15", "2023-09-18", "2023-24", "||E119||K219", 2),
-        (16, 204, "2023-12-01", "2023-12-05", "2023-24", "||N179 ,I801", 2),
-        (17, 205, "2024-02-20", "2024-02-25", "2023-24", "||E119 ,E780 ,J449", 3),
+        (513, 201, "2023-04-10", "2023-04-15", "2023-24", "||E119 ,I10", 2),
+        (514, 202, "2023-06-20", "2023-06-25", "2023-24", "||J449 ,E780", 2),
+        (515, 203, "2023-09-15", "2023-09-18", "2023-24", "||E119||K219", 2),
+        (516, 204, "2023-12-01", "2023-12-05", "2023-24", "||N179 ,I801", 2),
+        (517, 205, "2024-02-20", "2024-02-25", "2023-24", "||E119 ,E780 ,J449", 3),
         # Edge cases
         (18, 301, "2024-05-01", "2024-05-02", "2024-25", None, None),  # NULL diagnosis
         (19, 302, "2024-06-01", "2024-06-02", "2024-25", "", 0),  # Empty diagnosis
@@ -221,30 +245,72 @@ def setup_apcs_table(conn):
         ),
     ]
 
+    # Helper to compute Der_Activity_Month as YYYYMM from Admission_Date
+    def activity_month_from_date(date_str):
+        # date_str is YYYY-MM-DD
+        return date_str.replace("-", "")[:6]
+
     for row in test_data:
+        (
+            apcs_ident,
+            patient_id,
+            admission_date,
+            discharge_date,
+            fin_year,
+            diag_all,
+            diag_count,
+        ) = row
+        activity_month = activity_month_from_date(admission_date)
+
+        # Previous financial year rows go to ARCHIVED
+        target_table = "APCS_ARCHIVED" if fin_year == "2022-23" else "APCS"
+
         execute_sql(
             conn,
-            """INSERT INTO APCS (
+            f"""
+            INSERT INTO {target_table} (
                 APCS_Ident, Patient_ID, Admission_Date, Discharge_Date,
-                Der_Financial_Year, Der_Diagnosis_All, Der_Diagnosis_Count
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-            row,
+                Der_Financial_Year, Der_Activity_Month, Der_Diagnosis_All, Der_Diagnosis_Count
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                apcs_ident,
+                patient_id,
+                admission_date,
+                discharge_date,
+                fin_year,
+                activity_month,
+                diag_all,
+                diag_count,
+            ),
         )
 
 
 def setup_apcs_der_table(conn):
-    """Create and populate the APCS_Der table with primary and secondary diagnoses.
+    """Create and populate the APCS_Der tables (current and archived) with primary and secondary diagnoses.
 
     Primary diagnosis is typically the first code in Der_Diagnosis_All,
     but can be different in some cases.
     Secondary diagnosis is typically the second code.
     """
     drop_table_if_exists(conn, "APCS_Der")
+    drop_table_if_exists(conn, "APCS_Der_ARCHIVED")
 
     execute_sql(
         conn,
         """
         CREATE TABLE APCS_Der (
+            APCS_Ident BIGINT PRIMARY KEY,
+            Spell_Primary_Diagnosis VARCHAR(20),
+            Spell_Secondary_Diagnosis VARCHAR(20)
+        )
+    """,
+    )
+
+    execute_sql(
+        conn,
+        """
+        CREATE TABLE APCS_Der_ARCHIVED (
             APCS_Ident BIGINT PRIMARY KEY,
             Spell_Primary_Diagnosis VARCHAR(20),
             Spell_Secondary_Diagnosis VARCHAR(20)
@@ -319,12 +385,18 @@ def setup_apcs_der_table(conn):
         (60, "E780", None),  # ||E780
         (61, "E7800", "E7801"),  # ||E780
         (62, "E7801", None),  # ||E780
-        # Previous financial year data
+        # ARCHIVED data
         (13, "E119", "I10"),  # ||E119 ,I10
         (14, "J449", "E780"),  # ||J449 ,E780
         (15, "E119", "K219"),  # ||E119||K219
         (16, "N179", "I801"),  # ||N179 ,I801
         (17, "E119", "E780"),  # ||E119 ,E780 ,J449
+        # Previous financial year data
+        (513, "E119", "I10"),  # ||E119 ,I10
+        (514, "J449", "E780"),  # ||J449 ,E780
+        (515, "E119", "K219"),  # ||E119||K219
+        (516, "N179", "I801"),  # ||N179 ,I801
+        (517, "E119", "E780"),  # ||E119 ,E780 ,J449
         # Edge cases - NULL/empty Der_Diagnosis_All but may have primary set
         (18, None, None),  # NULL diagnosis - no primary or secondary
         (19, None, None),  # Empty diagnosis - no primary or secondary
@@ -341,9 +413,13 @@ def setup_apcs_der_table(conn):
     ]
 
     for row in primary_data:
+        # Rows corresponding to archived APCS_Ident (13-17) go to ARCHIVED
+        target_table = (
+            "APCS_Der_ARCHIVED" if row[0] in {13, 14, 15, 16, 17} else "APCS_Der"
+        )
         execute_sql(
             conn,
-            """INSERT INTO APCS_Der (APCS_Ident, Spell_Primary_Diagnosis, Spell_Secondary_Diagnosis)
+            f"""INSERT INTO {target_table} (APCS_Ident, Spell_Primary_Diagnosis, Spell_Secondary_Diagnosis)
                VALUES (%s, %s, %s)""",
             row,
         )

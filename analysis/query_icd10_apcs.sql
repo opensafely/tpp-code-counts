@@ -38,6 +38,32 @@ WITH apcs_base AS (
           SELECT 1 FROM PatientsWithTypeOneDissent p
           WHERE p.Patient_ID = apcs.Patient_ID
       )
+    AND Der_Activity_Month >= '202304'
+
+    UNION ALL
+
+    SELECT
+        apcs.APCS_Ident,
+        -- Normalize Der_Financial_Year to canonical form YYYY-YY
+        CASE 
+            WHEN apcs.Der_Financial_Year IS NULL OR LTRIM(RTRIM(apcs.Der_Financial_Year)) = '' THEN NULL
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9]-[0-9][0-9]' THEN LTRIM(RTRIM(apcs.Der_Financial_Year))
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9]/[0-9][0-9]' THEN REPLACE(LTRIM(RTRIM(apcs.Der_Financial_Year)), '/', '-')
+            WHEN LTRIM(RTRIM(apcs.Der_Financial_Year)) LIKE '[0-9][0-9][0-9][0-9][0-9][0-9]' THEN SUBSTRING(LTRIM(RTRIM(apcs.Der_Financial_Year)),1,4) + '-' + SUBSTRING(LTRIM(RTRIM(apcs.Der_Financial_Year)),5,2)
+            ELSE LTRIM(RTRIM(apcs.Der_Financial_Year))
+        END AS Der_Financial_Year,
+        LTRIM(RTRIM(der.Spell_Primary_Diagnosis)) as primary_diagnosis,
+        LTRIM(RTRIM(der.Spell_Secondary_Diagnosis)) as secondary_diagnosis,
+        -- Normalize: replace || with comma, remove spaces
+        REPLACE(REPLACE(apcs.Der_Diagnosis_All, '||', ','), ' ', '') AS normalized_codes
+    FROM APCS_ARCHIVED as apcs
+    LEFT JOIN APCS_Der_ARCHIVED AS der -- 1:1 relationship between apcs and apcs_der as per ehrql docs
+    ON apcs.APCS_Ident = der.APCS_Ident
+    WHERE NOT EXISTS (
+          SELECT 1 FROM PatientsWithTypeOneDissent p
+          WHERE p.Patient_ID = apcs.Patient_ID
+      )
+    AND Der_Activity_Month < '202304'
 ),
 -- Extract all codes from Der_Diagnosis_All
 all_codes AS (
