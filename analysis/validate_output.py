@@ -25,7 +25,7 @@ from pathlib import Path
 # - Codes with a trailing "*" (asterisk codes in ICD10)
 # - Codes with a trailing "|" (dagger codes in ICD10)
 # - Codes with a trailing "-" (seen a lot in data before 2023)
-ICD10_PATTERN = re.compile(r"^[A-Z][0-9]{2}\.?[0-9X]?[0-9]?[*|-|]?$")
+ICD10_PATTERN = re.compile(r"^[A-Z][0-9]{2}\.?[0-9X]?[0-9]?[*|-]?$")
 
 # Valid financial year patterns:
 # - canonical format required: "2024-25" (YYYY-YY)
