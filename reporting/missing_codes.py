@@ -14,7 +14,6 @@ from collections import defaultdict
 from pathlib import Path
 
 
-# safe paths
 REPO_ROOT = Path(__file__).parent.parent
 DATA_DIR = REPO_ROOT / "reporting" / "data"
 OUT_DIR = REPO_ROOT / "reporting" / "outputs"
@@ -28,22 +27,41 @@ FY_RE = re.compile(r"_(\d{4}_\d{2})")
 
 
 def load_ocl_codes() -> set:
-    """Load all ICD10 codes from OpenCodelists export."""
-    ocl_codes = set()
+    """Load all ICD10 codes from OpenCodelists export.
+    ONS death data is always 3 and 4 character ICD10 codes, while apcs
+    pads 3 character codes without children with an X to make 4 character codes.
+    """
+    ocl_codes = {
+        "apcs": set(),
+        "ons_deaths": set(),
+    }
     with open(OCL_ICD10_2019_CODES_FILE) as f:
         for line in f:
             code = line.strip()
             if code and "-" not in code:  # ocl contains code ranges which we'll ignore
-                ocl_codes.add(code)
-
+                ocl_codes["ons_deaths"].add(code)
     # Should be at least 12,000
-    assert len(ocl_codes) >= 12000, "Loaded too few ICD10 codes from OCL"
+    assert len(ocl_codes["ons_deaths"]) >= 12000, "Loaded too few ICD10 codes from OCL"
 
     # Should contain some known codes
     for known_code in ["A00", "B99", "C341", "E119", "I10", "J459", "Z992"]:
-        assert known_code in ocl_codes, (
+        assert known_code in ocl_codes["ons_deaths"], (
             f"Known ICD10 code {known_code} missing from OCL codes"
         )
+
+    # Now we create the APCS OCL codes set by adding 4-char codes with X suffixes
+    for code in ocl_codes["ons_deaths"]:
+        if len(code) != 3:
+            ocl_codes["apcs"].add(code)
+        else:
+            # Check if this 3-char code has any children in OCL
+            has_children = any(
+                other_code.startswith(code) and len(other_code) > 3
+                for other_code in ocl_codes["ons_deaths"]
+            )
+            if not has_children:
+                # Add the 4-char code with X suffix
+                ocl_codes["apcs"].add(f"{code}X")
     return ocl_codes
 
 
@@ -65,8 +83,7 @@ def process_csv(reader, name, usage):
     is_apcs = "apcs" in name
     for row in reader:
         code = (row.get("icd10_code") or "").strip()
-        assert code, f"Empty icd10_code in file {name}"
-        u = usage[code][financial_year]
+        u = usage["apcs" if is_apcs else "ons_deaths"][code][financial_year]
         if is_apcs:
             assert "apcs_primary_count" not in u, (
                 f"Duplicate APCS counts for code {code} financial_year {financial_year} in file {name}"
@@ -92,9 +109,20 @@ def load_code_usage_data():
     2. Local ZIP file in reporting/data/ folder
     3. Local CSV files in output/ folder (from running tests)
 
-    Returns a mapping: code -> { financial_year -> { counts } }
+    Returns a mapping:
+    {
+      "apcs": {
+        code -> { financial_year -> { counts } }
+      },
+      "ons_deaths": {
+        code -> { financial_year -> { counts } }
+      }
+    }
     """
-    usage = defaultdict(lambda: defaultdict(dict))
+    usage = {
+        "apcs": defaultdict(lambda: defaultdict(dict)),
+        "ons_deaths": defaultdict(lambda: defaultdict(dict)),
+    }
 
     csvs = None
     process_error = None
@@ -162,52 +190,34 @@ def find_missing_and_unused_codes():
     ocl_codes = load_ocl_codes()
     usage, process_error = load_code_usage_data()
 
-    all_used_codes = set(usage.keys())
+    all_used_codes = {
+        "apcs": set(usage["apcs"].keys()),
+        "ons_deaths": set(usage["ons_deaths"].keys()),
+    }
 
-    missing_from_ocl = all_used_codes - ocl_codes
-
-    # Find all 3 character ICD10 codes in OCL with no children for 'X' suffixing
-    three_char_codes_with_no_children = set()
-    for code in ocl_codes:
-        if len(code) != 3:
-            continue
-        has_children = any(
-            other_code.startswith(code) and len(other_code) > 3
-            for other_code in ocl_codes
-        )
-        if not has_children:
-            three_char_codes_with_no_children.add(code)
-
-    truly_missing = set()
-    for code in missing_from_ocl:
-        # Check if this code is a 4+ character code that starts with a 3-char code
-        is_covered = False
-        if len(code) == 4 and code.endswith("X"):
-            prefix = code[:3]
-            if prefix in three_char_codes_with_no_children:
-                is_covered = True
-
-        if not is_covered:
-            truly_missing.add(code)
+    missing_from_ocl = {
+        "apcs": all_used_codes["apcs"] - ocl_codes["apcs"],
+        "ons_deaths": all_used_codes["ons_deaths"] - ocl_codes["ons_deaths"],
+    }
 
     # Get counts for missing codes
-    missing_code_count_dict = {}
-    for code in truly_missing:
-        missing_code_count_dict[code] = usage[code]
+    missing_code_count_dict = {"apcs": {}, "ons_deaths": {}}
+    for code in missing_from_ocl["apcs"]:
+        missing_code_count_dict["apcs"][code] = usage["apcs"][code]
+    for code in missing_from_ocl["ons_deaths"]:
+        missing_code_count_dict["ons_deaths"][code] = usage["ons_deaths"][code]
 
-    # unused codes are those in OCL but not in usage
-    # but taking into acount 3-char codes with no children matching 4-char usage
-    unused_in_practice = set()
-    for code in ocl_codes:
-        if code not in all_used_codes:
-            # Check for 3-char codes with no children
-            if len(code) == 3 and code in three_char_codes_with_no_children:
-                # See if any 4-char usage codes start with this 3-char code
-                has_usage = any(used_code == f"{code}X" for used_code in all_used_codes)
-                if not has_usage:
-                    unused_in_practice.add(code)
-            else:
-                unused_in_practice.add(code)
+    unused_in_practice = {
+        "apcs": set(),
+        "ons_deaths": set(),
+    }
+    for code in ocl_codes["apcs"]:
+        if code not in all_used_codes["apcs"]:
+            unused_in_practice["apcs"].add(code)
+    for code in ocl_codes["ons_deaths"]:
+        if code not in all_used_codes["ons_deaths"]:
+            unused_in_practice["ons_deaths"].add(code)
+
     return missing_code_count_dict, unused_in_practice, usage, process_error
 
 
@@ -221,22 +231,16 @@ def main():
 
     # Initialize warning messages
     csv_warning = ""
-    md_warning = ""
 
     if process_error:
         csv_warning = (
             "# WARNING: Remote ZIP unavailable. Using local test data from `output/`.\n"
             "# This file was produced from local outputs because the remote ZIP could not be downloaded.\n"
-            f"# Remote download error: {process_error}\n"
-        )
-        md_warning = (
-            "# WARNING\n\n"
-            "**This report was generated using local test data from `output/` because the remote ZIP could not be downloaded.**\n\n"
-            f"Remote download error: {process_error}\n\n"
+            f"# Error message: {process_error}\n"
         )
 
-    # Write combined usage single file
-    with open(OUT_DIR / "code_usage_combined.csv", "w", newline="") as f:
+    # Write combined APCS usage single file
+    with open(OUT_DIR / "code_usage_combined_apcs.csv", "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
             [
@@ -245,12 +249,11 @@ def main():
                 "apcs_primary_count",
                 "apcs_secondary_count",
                 "apcs_all_count",
-                "ons_primary_count",
-                "ons_contributing_count",
+                "in_opencodelists",
             ]
         )
-        for code in sorted(usage):
-            for financial_year, counts in usage[code].items():
+        for code in sorted(usage["apcs"].keys()):
+            for financial_year, counts in usage["apcs"][code].items():
                 writer.writerow(
                     [
                         code,
@@ -258,73 +261,47 @@ def main():
                         counts.get("apcs_primary_count", "0"),
                         counts.get("apcs_secondary_count", "0"),
                         counts.get("apcs_all_count", "0"),
+                        "yes" if code not in missing_from_ocl["apcs"] else "no",
+                    ]
+                )
+    # Write combined ONS deaths usage single file
+    with open(OUT_DIR / "code_usage_combined_ons_deaths.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "icd10_code",
+                "financial_year",
+                "ons_primary_count",
+                "ons_contributing_count",
+                "in_opencodelists",
+            ]
+        )
+        for code in sorted(usage["ons_deaths"].keys()):
+            for financial_year, counts in usage["ons_deaths"][code].items():
+                writer.writerow(
+                    [
+                        code,
+                        financial_year,
                         counts.get("ons_primary_count", "0"),
                         counts.get("ons_contributing_count", "0"),
+                        "yes" if code not in missing_from_ocl["ons_deaths"] else "no",
                     ]
                 )
 
-    # Write unused codes CSV
-    with open(OUT_DIR / "unused_codes.csv", "w", newline="") as f:
+    # Write OCL codes not appearing in apcs usage
+    with open(OUT_DIR / "ocl_codes_not_in_apcs.csv", "w", newline="") as f:
         f.write(csv_warning)
         writer = csv.writer(f)
         writer.writerow(["icd10_code"])
-        for code in sorted(unused_in_practice):
+        for code in sorted(unused_in_practice["apcs"]):
             writer.writerow([code])
-
-    # Write missing codes CSV
-    with open(OUT_DIR / "missing_codes.csv", "w", newline="") as f:
+    # Write OCL codes not appearing in ons deaths usage
+    with open(OUT_DIR / "ocl_codes_not_in_ons_deaths.csv", "w", newline="") as f:
         f.write(csv_warning)
         writer = csv.writer(f)
-        writer.writerow(
-            [
-                "icd10_code",
-                "financial_year",
-                "apcs_primary_count",
-                "apcs_secondary_count",
-                "apcs_all_count",
-                "ons_primary_count",
-                "ons_contributing_count",
-            ]
-        )
-        for code in sorted(missing_from_ocl):
-            for financial_year, counts in missing_from_ocl[code].items():
-                writer.writerow(
-                    [
-                        code,
-                        financial_year,
-                        counts.get("apcs_primary_count", "0"),
-                        counts.get("apcs_secondary_count", "0"),
-                        counts.get("apcs_all_count", "0"),
-                        counts.get("ons_primary_count", "0"),
-                        counts.get("ons_contributing_count", "0"),
-                    ]
-                )
-
-    # Write markdown report
-    with open(OUT_DIR / "missing_codes_report.md", "w") as f:
-        f.write(md_warning)
-        f.write(
-            "# Report on ICD10 Codes Missing from OpenCodelists and Unused in Practice\n\n"
-        )
-        f.write("## ICD10 Codes Missing from OpenCodelists:\n\n")
-        f.write(
-            "| Code | Financial Year | APCS Primary Count | APCS Secondary Count | APCS All Count | ONS Primary Count | ONS Contributing Count |\n"
-        )
-        f.write(
-            "|------|----------------|--------------------|----------------------|----------------|-------------------|-----------------------|\n"
-        )
-        for code in sorted(missing_from_ocl):
-            for financial_year, counts in missing_from_ocl[code].items():
-                f.write(
-                    f"| {code} | {financial_year} | {counts.get('apcs_primary_count', '0')} | {counts.get('apcs_secondary_count', '0')} | {counts.get('apcs_all_count', '0')} | {counts.get('ons_primary_count', '0')} | {counts.get('ons_contributing_count', '0')} |\n"
-                )
-
-        f.write("\n## ICD10 Codes Unused in Practice:\n\n")
-        f.write(
-            "The following are the first 50 ICD10 codes present in OpenCodelists but not used in practice:\n\n"
-        )
-        for code in sorted(unused_in_practice)[:50]:
-            f.write(f"{code}\n")
+        writer.writerow(["icd10_code"])
+        for code in sorted(unused_in_practice["ons_deaths"]):
+            writer.writerow([code])
 
 
 if __name__ == "__main__":
