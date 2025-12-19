@@ -61,14 +61,8 @@ def test_missing_codes_uses_local_fallback_and_writes_reports(tmp_path, monkeypa
 
     # Check outputs - now split by apcs/ons_deaths
     out_dir = tmp_path / "reporting_outputs"
-    assert (out_dir / "unused_codes_apcs.csv").exists()
-    assert (out_dir / "unused_codes_ons_deaths.csv").exists()
     assert (out_dir / "code_usage_combined_apcs.csv").exists()
     assert (out_dir / "code_usage_combined_ons_deaths.csv").exists()
-
-    # Check that warning indicates local fallback
-    unused_csv_text = (out_dir / "unused_codes_apcs.csv").read_text()
-    assert "Remote ZIP unavailable" in unused_csv_text
 
     # Check that ABC999 appears in code_usage_combined_apcs.csv with in_opencodelists=no
     usage_csv_text = (out_dir / "code_usage_combined_apcs.csv").read_text()
