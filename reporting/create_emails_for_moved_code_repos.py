@@ -24,16 +24,10 @@ from collections import defaultdict
 from pathlib import Path
 
 
-# try:
-#     import requests
-# except ImportError:
-#     print("ERROR: requests library not found. Install it: pip install requests")
-#     sys.exit(1)
-
 SWAPPED_CODES_FILE = Path(__file__).parent / "swapped_codes.json"
 OUTPUT_FILE = Path(__file__).parent / "github_code_search_report.md"
 EMAIL_OUTPUT_DIR = Path(__file__).parent / "repo_emails"
-CACHE_FILE = Path(__file__).parent / "github_code_search_cache.json"
+CACHE_FILE = Path(__file__).parent / "data" / "github_code_search_cache.json"
 USAGE_FILE = Path(__file__).parent / "outputs" / "code_usage_combined_apcs.csv"
 GITHUB_API = "https://api.github.com"
 
