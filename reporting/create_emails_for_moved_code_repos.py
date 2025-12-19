@@ -29,6 +29,7 @@ OUTPUT_FILE = Path(__file__).parent / "github_code_search_report.md"
 EMAIL_OUTPUT_DIR = Path(__file__).parent / "repo_emails"
 CACHE_FILE = Path(__file__).parent / "data" / "github_code_search_cache.json"
 USAGE_FILE = Path(__file__).parent / "outputs" / "code_usage_combined_apcs.csv"
+PREFIX_MATCHING_FILE = Path(__file__).parent / "outputs" / "prefix_matching_repos.csv"
 GITHUB_API = "https://api.github.com"
 
 
@@ -132,6 +133,52 @@ def load_usage_totals():
         print(f"WARNING: Could not read usage file {USAGE_FILE}: {e}")
 
     return totals
+
+
+def load_prefix_matching_warnings():
+    """Load prefix matching warnings per repo from prefix_matching_repos.csv.
+
+    Returns:
+        dict: {repo: [{"codelist": str, "current": int, "with_prefix": int, "pct": str}]}
+    """
+    warnings = defaultdict(list)
+
+    if not PREFIX_MATCHING_FILE.exists():
+        print(
+            f"INFO: Prefix matching file not found at {PREFIX_MATCHING_FILE}, skipping prefix matching warnings"
+        )
+        return warnings
+
+    try:
+        with open(PREFIX_MATCHING_FILE) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                repo = row.get("repo", "").strip()
+                codelist = row.get("codelist", "").strip()
+                current = row.get("current_event_count", "0").strip()
+                with_prefix = row.get("event_count_with_prefix_matching", "0").strip()
+
+                # Skip repos marked as not found
+                if repo == "(not found in repos)" or not repo:
+                    continue
+
+                # Remove opensafely/ prefix if present
+                if repo.startswith("opensafely/"):
+                    repo = repo.replace("opensafely/", "")
+
+                warnings[repo].append(
+                    {
+                        "codelist": codelist,
+                        "current": current,
+                        "with_prefix": with_prefix,
+                    }
+                )
+    except OSError as e:
+        print(
+            f"WARNING: Could not read prefix matching file {PREFIX_MATCHING_FILE}: {e}"
+        )
+
+    return warnings
 
 
 def should_exclude_line(line, path):
@@ -303,7 +350,7 @@ def load_codes():
         return {}, []
 
 
-def generate_repo_emails(all_results, codes, groups, usage_totals):
+def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnings):
     """Generate markdown emails for each repo."""
 
     # Aggregate all results by repo and file
@@ -341,6 +388,55 @@ def generate_repo_emails(all_results, codes, groups, usage_totals):
         email_lines = []
         email_lines.append(f"## opensafely/{repo_name}")
         email_lines.append("")
+
+        # Add prefix matching warnings if present for this repo
+        if repo_name in prefix_warnings:
+            warnings = prefix_warnings[repo_name]
+            email_lines.append("### ⚠️  Prefix Matching Warning for ehrQL Users")
+            email_lines.append("")
+            email_lines.append(
+                "Your study uses codelist(s) that may be affected by changes in prefix matching behavior "
+                "between Cohort Extractor and ehrQL."
+            )
+            email_lines.append("")
+            email_lines.append(
+                "**Background**: In Cohort Extractor (the old framework), prefix matching was applied by default when "
+                "querying the primary and secondary diagnosis fields in HES APCS data. This means that "
+                "a code like `E10` would automatically match `E10`, `E100`, `E101`, `E102`, etc."
+            )
+            email_lines.append("")
+            email_lines.append(
+                "**In ehrQL, prefix matching is NOT automatically applied to these fields.** "
+                "If your codelist is incomplete (contains parent codes without all their descendants), "
+                "you may be under-ascertaining cases."
+            )
+            email_lines.append("")
+            email_lines.append("**Affected Codelists:**")
+            email_lines.append("")
+
+            for warning in warnings:
+                codelist = warning["codelist"]
+                current = warning["current"]
+                with_prefix = warning["with_prefix"]
+
+                # Format numbers with commas
+                try:
+                    current_formatted = f"{int(current):,}"
+                except ValueError:
+                    current_formatted = current
+
+                try:
+                    with_prefix_formatted = f"{int(with_prefix):,}"
+                except ValueError:
+                    with_prefix_formatted = with_prefix
+
+                email_lines.append(f"- **`{codelist}`**")
+                email_lines.append(f"  - Current events: {current_formatted}")
+                email_lines.append(f"  - With prefix matching: {with_prefix_formatted}")
+
+            email_lines.append("")
+            email_lines.append("---")
+            email_lines.append("")
 
         # Helpers for permalinks and line numbers (scoped to this repo section)
         default_branch_cache = {}
@@ -397,6 +493,17 @@ def generate_repo_emails(all_results, codes, groups, usage_totals):
                 if stripped in targets and stripped not in mapping:
                     mapping[stripped] = idx
             return mapping
+
+        # Add warning header for moved codes section if there are any groups to show
+        if any(set(group.get("codes", [])) & repo_codes for group in groups):
+            email_lines.append("### ⚠️  Moved ICD-10 Codes")
+            email_lines.append("")
+            email_lines.append(
+                "The following ICD-10 codes appear in your study but have been moved or changed "
+                "between different editions of ICD-10. The codes you're using may not match what "
+                "appears in the actual data."
+            )
+            email_lines.append("")
 
         for group in groups:
             group_codes = group.get("codes", [])
@@ -582,9 +689,12 @@ def generate_repo_emails(all_results, codes, groups, usage_totals):
 
         return "\n".join(email_lines) + "\n"
 
+    # Collect all repos (both from code search and prefix matching warnings)
+    all_repos = set(repo_file_matches.keys()) | set(prefix_warnings.keys())
+
     # Write results organized by repo, then by file and emit per-repo files
-    for repo in sorted(repo_file_matches.keys()):
-        files = repo_file_matches[repo]
+    for repo in sorted(all_repos):
+        files = repo_file_matches.get(repo, {})
 
         # Write per-repo text file for emailing
         email_path = EMAIL_OUTPUT_DIR / f"{repo}.md"
@@ -647,8 +757,14 @@ def main():
         print(f"\nCache saved to {CACHE_FILE}")
 
     usage_totals = load_usage_totals()
+    prefix_warnings = load_prefix_matching_warnings()
 
-    generate_repo_emails(all_results, codes, groups, usage_totals)
+    if prefix_warnings:
+        print(
+            f"\nLoaded prefix matching warnings for {len(prefix_warnings)} repositories"
+        )
+
+    generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnings)
 
 
 if __name__ == "__main__":

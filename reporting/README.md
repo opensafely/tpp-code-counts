@@ -139,14 +139,15 @@ python3 reporting/analyze_prefix_matching.py
 
 ---
 
-### 4. `create_emails_for_moved_code_repos.py` - GitHub Code Search
+### 4. `create_emails_for_moved_code_repos.py` - GitHub Code Search & Email Generation
 
-**Purpose**: Searches GitHub for ICD-10 codes that have moved between the 2016 and 2019 versions, generating per-repo email notifications.
+**Purpose**: Searches GitHub for ICD-10 codes that have moved between the 2016 and 2019 versions, generating per-repo email notifications. Also integrates prefix matching warnings for codelists with incomplete descendant coverage.
 
 **Inputs**:
 
 - `reporting/swapped_codes.json` - Codes that changed between ICD-10 versions
 - `reporting/outputs/code_usage_combined_apcs.csv` - Usage counts for context
+- `reporting/outputs/prefix_matching_repos.csv` - Prefix matching warnings per
 - GitHub API (requires `gh` CLI authentication)
 
 **Outputs**:
@@ -173,6 +174,26 @@ python3 reporting/create_emails_for_moved_code_repos.py
 - Includes usage totals and GitHub permalinks with line numbers
 - Handles rate limiting with automatic retry
 - Caching prevents redundant API calls
+- **Integrates prefix matching warnings** - automatically includes ehrQL prefix matching warnings in emails for affected repos
+- **Unified emails** - generates a single email with both moved code findings and prefix matching warnings (if applicable) per repository
+
+**Email Content**:
+
+Each generated email may include:
+
+1. **Prefix Matching Warnings** (if applicable):
+
+   - List of codelists with incomplete descendant coverage
+   - Explanation of Cohort Extractor vs ehrQL behavior differences
+   - Current event counts vs. expected counts with prefix matching
+   - Percentage increase to highlight impact
+   - Recommendation to review codelists or use explicit prefix matching
+
+2. **Moved Code Findings** (if applicable):
+   - Codes that changed between ICD-10 versions
+   - File locations with line numbers and GitHub permalinks
+   - Usage statistics
+   - Custom messages based on code type
 
 ---
 
