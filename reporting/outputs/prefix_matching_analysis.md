@@ -33,9 +33,9 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 2,122,780 | - | - |
-| Strict | 2,480,500 | +357,720 | +16.85% |
-| Partial | 2,486,870 | +364,090 | +17.15% |
+| Baseline | 2,141,870 | - | - |
+| Strict | 2,503,100 | +361,230 | +16.87% |
+| Partial | 2,509,550 | +367,680 | +17.17% |
 
 ### Unaffected Codelists
 
@@ -51,19 +51,19 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 1,396,520 | - | - |
-| Strict | 1,527,790 | +131,270 | +9.40% |
-| Partial | 1,533,110 | +136,590 | +9.78% |
+| Baseline | 1,409,900 | - | - |
+| Strict | 1,542,180 | +132,280 | +9.38% |
+| Partial | 1,547,570 | +137,670 | +9.76% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 442,640 | - | - |
-| Strict | 669,090 | +226,450 | +51.16% |
-| Partial | 670,140 | +227,500 | +51.40% |
-| Lax | 1,618,920 | +1,176,280 | +265.74% |
+| Baseline | 446,270 | - | - |
+| Strict | 675,220 | +228,950 | +51.30% |
+| Partial | 676,280 | +230,010 | +51.54% |
+| Lax | 1,634,480 | +1,188,210 | +266.25% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
@@ -76,10 +76,10 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 283,620 | - | - |
-| Strict | 283,620 | +0 | +0.00% |
-| Partial | 283,620 | +0 | +0.00% |
-| Lax | 283,620 | +0 | +0.00% |
+| Baseline | 285,700 | - | - |
+| Strict | 285,700 | +0 | +0.00% |
+| Partial | 285,700 | +0 | +0.00% |
+| Lax | 285,700 | +0 | +0.00% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
@@ -93,9 +93,9 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 2,448,080 | - | - |
-| Strict | 2,924,680 | +476,600 | +19.47% |
-| Partial | 2,952,250 | +504,170 | +20.59% |
+| Baseline | 2,469,100 | - | - |
+| Strict | 2,949,620 | +480,520 | +19.46% |
+| Partial | 2,977,460 | +508,360 | +20.59% |
 
 ### Unaffected Codelists
 
@@ -111,19 +111,19 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 1,695,870 | - | - |
-| Strict | 1,741,750 | +45,880 | +2.71% |
-| Partial | 1,766,180 | +70,310 | +4.15% |
+| Baseline | 1,710,850 | - | - |
+| Strict | 1,757,160 | +46,310 | +2.71% |
+| Partial | 1,781,840 | +70,990 | +4.15% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 515,560 | - | - |
-| Strict | 946,280 | +430,720 | +83.54% |
-| Partial | 949,420 | +433,860 | +84.15% |
-| Lax | 1,337,350 | +821,790 | +159.40% |
+| Baseline | 519,630 | - | - |
+| Strict | 953,840 | +434,210 | +83.56% |
+| Partial | 957,000 | +437,370 | +84.17% |
+| Lax | 1,348,440 | +828,810 | +159.50% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
@@ -136,10 +136,10 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 236,650 | - | - |
-| Strict | 236,650 | +0 | +0.00% |
-| Partial | 236,650 | +0 | +0.00% |
-| Lax | 236,650 | +0 | +0.00% |
+| Baseline | 238,620 | - | - |
+| Strict | 238,620 | +0 | +0.00% |
+| Partial | 238,620 | +0 | +0.00% |
+| Lax | 238,620 | +0 | +0.00% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
@@ -161,8 +161,8 @@ For our analysis we report:
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 16,619,920 | - | - |
-| With PARTIAL descendants (prefix matching) | 16,900,490 | +280,570 | +1.69% |
+| Baseline (codelist codes only) | 16,776,390 | - | - |
+| With PARTIAL descendants (prefix matching) | 17,059,270 | +282,880 | +1.69% |
 
 ### Unaffected Codelists
 
@@ -177,14 +177,14 @@ For our analysis we report:
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 11,676,240 | - | - |
-| With PARTIAL descendants (prefix matching) | 11,944,260 | +268,020 | +2.30% |
+| Baseline (codelist codes only) | 11,787,920 | - | - |
+| With PARTIAL descendants (prefix matching) | 12,058,100 | +270,180 | +2.29% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 3,403,020 | - | - |
-| With PARTIAL descendants (prefix matching) | 3,415,570 | +12,550 | +0.37% |
+| Baseline (codelist codes only) | 3,434,020 | - | - |
+| With PARTIAL descendants (prefix matching) | 3,446,720 | +12,700 | +0.37% |
 
