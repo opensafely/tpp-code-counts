@@ -24,6 +24,8 @@ FILENAME_RE = re.compile(
     r"(?:output/)?icd10_(apcs|ons_deaths)_[0-9]{4}_[0-9]{2}.*\.csv"
 )
 FY_RE = re.compile(r"_(\d{4}_\d{2})")
+# Regex to extract row numbers from filenames like "icd10_apcs_2016_17_rows_9983_14973.csv"
+ROWS_RE = re.compile(r"_rows_(\d+)_(\d+)\.csv$")
 
 
 def load_ocl_codes() -> set:
@@ -75,6 +77,99 @@ def fy_from_filename(name: str) -> str:
     m = FY_RE.search(name)
     assert m, f"Could not extract financial year from filename: {name}"
     return m.group(1).replace("_", "-")
+
+
+def get_file_key(name: str) -> str:
+    """Get the key for deduplication - filename up to and including first row number.
+
+    For example:
+    - 'output/icd10_apcs_2016_17_rows_9983_13591.csv' -> 'output/icd10_apcs_2016_17_rows_9983'
+    - 'output/icd10_apcs_2016_17_rows_9983_14973.csv' -> 'output/icd10_apcs_2016_17_rows_9983'
+    - 'output/icd10_apcs_2021_22.csv' -> 'output/icd10_apcs_2021_22'
+    """
+    m = ROWS_RE.search(name)
+    if m:
+        # Return everything up to and including the first row number
+        return name[: m.start()] + f"_rows_{m.group(1)}"
+    # If no row numbers found, return up to .csv
+    if name.endswith(".csv"):
+        return name[:-4]
+    return name
+
+
+def deduplicate_files(names: list) -> list:
+    """Keep only files with highest second row number when duplicates exist.
+
+    If multiple files have the same prefix up to and including the first row number,
+    only keep the one with the highest second row number.
+
+    Also, if there are both chunked files (with _rows_) and non-chunked files for the
+    same base name, skip the non-chunked file as it's likely incomplete.
+
+    For example, given:
+    - 'output/icd10_apcs_2016_17_rows_9983_13591.csv'
+    - 'output/icd10_apcs_2016_17_rows_9983_14973.csv'
+
+    Only keep the second one (14973 > 13591).
+
+    And given:
+    - 'output/icd10_apcs_2021_22.csv'
+    - 'output/icd10_apcs_2021_22_rows_0001_4991.csv'
+
+    Skip the first one (non-chunked version).
+    """
+    # First pass: identify base names that have chunked versions
+    base_names_with_chunks = set()
+    for name in names:
+        m = ROWS_RE.search(name)
+        if m:
+            # Extract base name (everything before _rows_)
+            base_name = name[: m.start()]
+            base_names_with_chunks.add(base_name)
+
+    # Second pass: group files by their deduplication key, excluding non-chunked if chunks exist
+    by_key = defaultdict(list)
+    for name in names:
+        m = ROWS_RE.search(name)
+        if not m:
+            # Non-chunked file
+            # Check if a chunked version exists
+            if name.endswith(".csv"):
+                base_name = name[:-4]
+            else:
+                base_name = name
+
+            if base_name in base_names_with_chunks:
+                # Skip this file - chunked versions exist
+                continue
+
+        key = get_file_key(name)
+        by_key[key].append(name)
+
+    # Third pass: for each group, pick the file with the highest second row number
+    result = []
+    for key, group in by_key.items():
+        if len(group) == 1:
+            result.append(group[0])
+        else:
+            # Multiple files with same prefix - pick the one with highest second row number
+            best = None
+            best_second_row = -1
+            for name in group:
+                m = ROWS_RE.search(name)
+                if m:
+                    second_row = int(m.group(2))
+                    if second_row > best_second_row:
+                        best_second_row = second_row
+                        best = name
+                else:
+                    # Shouldn't happen given our filtering, but if no rows pattern, take first
+                    if best is None:
+                        best = name
+            if best:
+                result.append(best)
+
+    return result
 
 
 def process_csv(reader, name, usage):
@@ -161,6 +256,8 @@ def load_code_usage_data():
     # Process ZIP files (remote or local)
     if csvs:
         data, names = csvs
+        # Deduplicate files - keep only highest second row number for duplicates
+        names = deduplicate_files(names)
         buf = io.BytesIO(data)
         with zipfile.ZipFile(buf) as z:
             for name in names:
@@ -174,7 +271,15 @@ def load_code_usage_data():
                     process_csv(reader, name, usage)
     else:
         # Fallback: read local files from LOCAL_USAGE_OUTPUT_DIR
-        for fpath in LOCAL_USAGE_OUTPUT_DIR.glob("icd10_*.csv"):
+        file_paths = list(LOCAL_USAGE_OUTPUT_DIR.glob("icd10_*.csv"))
+        file_names = [fpath.name for fpath in file_paths]
+        # Deduplicate file names
+        deduplicated_names = deduplicate_files(file_names)
+        deduplicated_set = set(deduplicated_names)
+
+        for fpath in file_paths:
+            if fpath.name not in deduplicated_set:
+                continue
             if not FILENAME_RE.match(fpath.name):
                 print(f"Skipping unexpected file: {fpath}")
                 continue
