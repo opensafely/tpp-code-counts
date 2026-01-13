@@ -195,6 +195,71 @@ Each generated email may include:
    - Usage statistics
    - Custom messages based on code type
 
+### 5. `generate_consolidated_reports.py` - Consolidated Reports Generation
+
+**Purpose**: Generates two consolidated markdown reports summarizing projects affected by ICD-10 code moving and prefix matching issues. Instead of per-repo emails, creates organization-wide reports showing all affected projects and their impacts.
+
+**Inputs**:
+
+- `reporting/swapped_codes.json` - Codes that moved between ICD-10 versions
+- `reporting/outputs/code_usage_combined_apcs.csv` - Usage counts (all-time totals for all diagnoses field)
+- `reporting/outputs/prefix_matching_repos.csv` - Prefix matching warnings per repo
+- `reporting/outputs/codelist_coverage_detail_apcs.csv` - Codelist coverage details
+- `reporting/data/github_code_search_cache.json` - Cached GitHub search results (created if not exists)
+- GitHub API (requires `gh` CLI authentication)
+
+**Outputs**:
+
+- `reporting/outputs/moved_codes_report.md` - Consolidated report of all projects affected by moved ICD-10 codes
+- `reporting/outputs/prefix_matching_report.md` - Consolidated report of all projects affected by prefix matching changes
+- `reporting/data/github_code_search_cache.json` - Updated cache of GitHub search results
+
+**Run**:
+
+```bash
+# First time or to refresh GitHub search cache
+gh auth login
+python3 reporting/generate_consolidated_reports.py --force
+
+# Use cached GitHub search results
+python3 reporting/generate_consolidated_reports.py
+```
+
+**Key Features**:
+
+- **Moved Codes Report**:
+
+  - Searches all opensafely organization repositories for moved codes
+  - Groups findings by affected project
+  - Shows all-time usage totals from "all diagnoses" field in APCS data
+  - Provides context about which ICD-10 edition codes appear in
+  - Custom messaging for different code groups (G906, K58*, U* codes)
+
+- **Prefix Matching Report**:
+
+  - Lists projects using codelists with incomplete descendant coverage
+  - Shows three scenarios for each affected codelist:
+    - **Exact match**: Only codes explicitly in codelist (2024-25 primary diagnosis counts)
+    - **With X-padded codes**: Exact codes plus X-padded versions (2024-25 primary diagnosis counts)
+    - **With prefix matching**: Including all descendants (2024-25 primary diagnosis counts)
+  - Calculates percentage increase to show impact
+  - Explains Cohort Extractor vs ehrQL behavioral differences
+  - Aggregates totals per project
+
+- **Caching & Rate Limiting**:
+  - Caches GitHub API search results to avoid redundant calls
+  - Handles GitHub API rate limiting with automatic retry
+  - Use `--force` flag to refresh cached search results
+
+**Report Summaries**:
+
+Both reports include:
+
+- Executive summary with count of affected projects
+- List of all affected projects
+- Detailed breakdowns per project
+- Usage statistics and impact metrics
+
 ---
 
 ## Recommended Execution Order
@@ -211,8 +276,11 @@ python3 reporting/analyze_codelist_coverage.py
 # 3. Analyze prefix matching impact (requires output from step 2)
 python3 reporting/analyze_prefix_matching.py
 
-# 4. Search GitHub for moved codes (optional, requires gh CLI)
+# 4. Generate consolidated reports (requires output from steps 1-3, and gh CLI)
 gh auth login  # if not already authenticated
+python3 reporting/generate_consolidated_reports.py
+
+# Alternative: Generate per-repo emails instead of consolidated reports
 python3 reporting/create_emails_for_moved_code_repos.py
 ```
 
@@ -230,7 +298,9 @@ reporting/outputs/
 ├── ocl_codes_not_in_ons_deaths.csv           # From missing_codes.py
 ├── prefix_matching_analysis.csv              # From analyze_prefix_matching.py
 ├── prefix_matching_analysis.md               # From analyze_prefix_matching.py
-└── prefix_matching_repos.csv                 # From analyze_prefix_matching.py
+├── prefix_matching_repos.csv                 # From analyze_prefix_matching.py
+├── moved_codes_report.md                     # From generate_consolidated_reports.py
+└── prefix_matching_report.md                 # From generate_consolidated_reports.py
 ```
 
 ## Notes
