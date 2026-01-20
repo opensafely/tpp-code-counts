@@ -1,6 +1,6 @@
 # Prefix Matching Issues Report
 
-**Generated**: 2026-01-13 16:32:35
+**Generated**: 2026-01-20 13:10:53
 
 ## ⚠️  Prefix Matching Changes Between Cohort Extractor and ehrQL
 
@@ -23,14 +23,16 @@ For each affected project and each affected codelist, this report shows how many
 
 ### Affected Projects:
 
-- `COMPARES-vaccines`
-- `JAKi-hosp`
-- `disease_incidence`
-- `inflammatory_rheum`
-- `metformin_covid`
-- `post-covid-vax-autoimmune`
-- `prophy_effects_Sotro_Molnup`
-- `vte-diagnoses-and-deaths`
+| Project # | Project Name | Repository |
+|-----------|-------------|-----------|
+|  |  | [COMPARES-vaccines](https://github.com/opensafely/COMPARES-vaccines) |
+|  |  | [JAKi-hosp](https://github.com/opensafely/JAKi-hosp) |
+| 182 | [Incidence of long-term conditions in England before and after the onset of the COVID-19 pandemic](https://jobs.opensafely.org/incidence-of-long-term-conditions-in-england-before-and-after-the-onset-of-the-covid-19-pandemic) | [disease_incidence](https://github.com/opensafely/disease_incidence) |
+| 193 | [Incidence and management of inflammatory rheumatic diseases before, during and after the COVID-19 pandemic](https://jobs.opensafely.org/incidence-and-management-of-inflammatory-rheumatic-diseases-before-during-and-after-the-covid-19-pandemic) | [inflammatory_rheum](https://github.com/opensafely/inflammatory_rheum) |
+| 175 | [Implications of metformin for Long COVID](https://jobs.opensafely.org/implications-of-metformin-for-long-covid) | [metformin_covid](https://github.com/opensafely/metformin_covid) |
+|  |  | [post-covid-vax-autoimmune](https://github.com/opensafely/post-covid-vax-autoimmune) |
+| 91 | [Coverage, effectiveness and safety of neutralising monoclonal antibodies or antivirals for non-hospitalised patients with COVID-19](https://jobs.opensafely.org/coverage-effectiveness-and-safety-of-neutralising-monoclonal-antibodies-or-antivirals-for-non-hospitalised-patients-with-covid-19) | [prophy_effects_Sotro_Molnup](https://github.com/opensafely/prophy_effects_Sotro_Molnup) |
+| 153 | [What was the impact of COVID-19 on mortality related to venous thromboembolism in England?](https://jobs.opensafely.org/what-was-the-impact-of-covid-19-on-mortality-related-to-venous-thromboembolism-in-england) | [vte-diagnoses-and-deaths](https://github.com/opensafely/vte-diagnoses-and-deaths) |
 
 ---
 
