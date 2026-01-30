@@ -34,6 +34,7 @@ PREFIX_MATCHING_FILE = Path(__file__).parent / "outputs" / "prefix_matching_repo
 CODELIST_COVERAGE_FILE = (
     Path(__file__).parent / "outputs" / "codelist_coverage_detail_apcs.csv"
 )
+REPO_PROJECT_NUMBER_FILE = Path(__file__).parent / "data" / "repo_projectnumber.csv"
 
 
 def run_gh_command(args):
@@ -164,6 +165,9 @@ def load_codelist_codes():
         with open(CODELIST_COVERAGE_FILE) as f:
             reader = csv.DictReader(f)
             for row in reader:
+                if row.get("Exists in ehrQL repo") != "Y":
+                    continue
+
                 codelist_id = row.get("codelist_id", "").strip()
                 icd10_code = row.get("icd10_code", "").strip()
                 status = row.get("status", "").strip()
@@ -179,6 +183,44 @@ def load_codelist_codes():
         print(f"WARNING: Could not read codelist coverage file: {e}")
 
     return codelist_codes
+
+
+def load_repo_project_numbers():
+    """Load repo to project number mapping from CSV.
+
+    Returns:
+        dict: {repo_name: {"number": str, "name": str, "slug": str, "url": str}}
+    """
+    repo_project_map = {}
+
+    if not REPO_PROJECT_NUMBER_FILE.exists():
+        print(f"INFO: Repo project number file not found at {REPO_PROJECT_NUMBER_FILE}")
+        return repo_project_map
+
+    try:
+        with open(REPO_PROJECT_NUMBER_FILE) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                number = row.get("number", "").strip()
+                name = row.get("name", "").strip()
+                slug = row.get("slug", "").strip()
+                url = row.get("url", "").strip()
+
+                if url:
+                    # Extract repo name from URL (e.g., "repo-name" from URL)
+                    # URLs are like: https://github.com/opensafely/repo-name
+                    if "github.com/opensafely/" in url:
+                        repo_name = url.split("github.com/opensafely/")[1].rstrip("/")
+                        repo_project_map[repo_name] = {
+                            "number": number if number else "",
+                            "name": name if name else "",
+                            "slug": slug if slug else "",
+                            "url": url,
+                        }
+    except OSError as e:
+        print(f"WARNING: Could not read repo project number file: {e}")
+
+    return repo_project_map
 
 
 def calculate_usage_scenarios(usage_totals, codelist_codes):
@@ -446,7 +488,9 @@ def load_codes():
         return {}, []
 
 
-def generate_moved_codes_report(all_results, codes, groups, usage_totals):
+def generate_moved_codes_report(
+    all_results, codes, groups, usage_totals, repo_project_map
+):
     """Generate consolidated report for projects affected by code moving."""
 
     # Aggregate all results by repo and file
@@ -487,8 +531,30 @@ def generate_moved_codes_report(all_results, codes, groups, usage_totals):
     report_lines.append("")
     report_lines.append("### Affected Projects:")
     report_lines.append("")
+
+    # Create markdown table with project number, name, and repo
+    report_lines.append("| Project # | Project Name | Repository |")
+    report_lines.append("|-----------|-------------|-----------|")
     for repo in affected_repos:
-        report_lines.append(f"- `{repo}`")
+        repo_info = repo_project_map.get(repo, {})
+        project_num = repo_info.get("number", "")
+        project_name = repo_info.get("name", "")
+        project_slug = repo_info.get("slug", "")
+        github_url = f"https://github.com/opensafely/{repo}"
+
+        # Format project name as link if slug exists
+        if project_slug and project_name:
+            name_cell = f"[{project_name}](https://jobs.opensafely.org/{project_slug})"
+        elif project_name:
+            name_cell = project_name
+        else:
+            name_cell = ""
+
+        # Format repo as link to GitHub
+        repo_cell = f"[{repo}]({github_url})"
+
+        report_lines.append(f"| {project_num} | {name_cell} | {repo_cell} |")
+
     report_lines.append("")
     report_lines.append("---")
     report_lines.append("")
@@ -580,13 +646,16 @@ def generate_moved_codes_report(all_results, codes, groups, usage_totals):
         print(f"ERROR: Could not write moved codes report: {e}")
 
 
-def generate_prefix_matching_report(prefix_warnings, usage_totals, codelist_codes):
+def generate_prefix_matching_report(
+    prefix_warnings, usage_totals, codelist_codes, repo_project_map
+):
     """Generate consolidated report for projects affected by prefix matching.
 
     Args:
         prefix_warnings: dict of {repo: [warnings]}
         usage_totals: dict of {code: {"total": int}}
         codelist_codes: dict of {codelist_id: [codes]}
+        repo_project_map: dict of {repo: project_number}
     """
 
     if not prefix_warnings:
@@ -638,8 +707,30 @@ def generate_prefix_matching_report(prefix_warnings, usage_totals, codelist_code
     report_lines.append("")
     report_lines.append("### Affected Projects:")
     report_lines.append("")
+
+    # Create markdown table with project number, name, and repo
+    report_lines.append("| Project # | Project Name | Repository |")
+    report_lines.append("|-----------|-------------|-----------|")
     for repo in affected_repos:
-        report_lines.append(f"- `{repo}`")
+        repo_info = repo_project_map.get(repo, {})
+        project_num = repo_info.get("number", "")
+        project_name = repo_info.get("name", "")
+        project_slug = repo_info.get("slug", "")
+        github_url = f"https://github.com/opensafely/{repo}"
+
+        # Format project name as link if slug exists
+        if project_slug and project_name:
+            name_cell = f"[{project_name}](https://jobs.opensafely.org/{project_slug})"
+        elif project_name:
+            name_cell = project_name
+        else:
+            name_cell = ""
+
+        # Format repo as link to GitHub
+        repo_cell = f"[{repo}]({github_url})"
+
+        report_lines.append(f"| {project_num} | {name_cell} | {repo_cell} |")
+
     report_lines.append("")
     report_lines.append("---")
     report_lines.append("")
@@ -755,10 +846,15 @@ def main():
     usage_totals = load_usage_totals()
     prefix_warnings = load_prefix_matching_warnings()
     codelist_codes = load_codelist_codes()
+    repo_project_map = load_repo_project_numbers()
 
     print()
-    generate_moved_codes_report(all_results, codes, groups, usage_totals)
-    generate_prefix_matching_report(prefix_warnings, usage_totals, codelist_codes)
+    generate_moved_codes_report(
+        all_results, codes, groups, usage_totals, repo_project_map
+    )
+    generate_prefix_matching_report(
+        prefix_warnings, usage_totals, codelist_codes, repo_project_map
+    )
 
     print(f"\n✓ Reports generated in {Path(__file__).parent / 'outputs'}/")
 
