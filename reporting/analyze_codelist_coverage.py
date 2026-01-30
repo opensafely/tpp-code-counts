@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from missing_codes import load_ocl_codes
+from .common import load_ocl_codes
 
 
 # Paths

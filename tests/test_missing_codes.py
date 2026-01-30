@@ -35,7 +35,7 @@ def test_missing_codes_uses_local_fallback_and_writes_reports(tmp_path, monkeypa
     )
 
     # Monkeypatch module paths to use our tmp locations
-    monkeypatch.setattr(mc, "LOCAL_USAGE_OUTPUT_DIR", tmp_output)
+    monkeypatch.setattr(mc, "OUTPUT_DIR", tmp_output)
     monkeypatch.setattr(mc, "OUT_DIR", tmp_path / "reporting_outputs")
     # Point LOCAL_DATA_ZIP to a non-existent file to force fallback
     monkeypatch.setattr(mc, "LOCAL_DATA_ZIP", tmp_path / "nonexistent.zip")
@@ -159,7 +159,7 @@ def test_three_char_code_with_no_children_matches_four_char_usage(
     )
 
     # Monkeypatch module paths to use our tmp locations
-    monkeypatch.setattr(mc, "LOCAL_USAGE_OUTPUT_DIR", tmp_output)
+    monkeypatch.setattr(mc, "OUTPUT_DIR", tmp_output)
     monkeypatch.setattr(mc, "OUT_DIR", tmp_path / "reporting_outputs")
     # Point LOCAL_DATA_ZIP to a non-existent file to force fallback
     monkeypatch.setattr(mc, "LOCAL_DATA_ZIP", tmp_path / "nonexistent.zip")

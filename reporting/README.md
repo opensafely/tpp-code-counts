@@ -49,7 +49,7 @@ Both of the above generated from the [OpenSAFELY variable survey repo](https://g
 **Run**:
 
 ```bash
-python3 reporting/missing_codes.py
+python3 -m reporting.missing_codes
 ```
 
 **Key Features**:
@@ -81,7 +81,7 @@ python3 reporting/missing_codes.py
 **Run**:
 
 ```bash
-python3 reporting/analyze_codelist_coverage.py
+python3 -m reporting.analyze_codelist_coverage
 ```
 
 **Key Features**:
@@ -182,7 +182,6 @@ python3 reporting/create_emails_for_moved_code_repos.py
 Each generated email may include:
 
 1. **Prefix Matching Warnings** (if applicable):
-
    - List of codelists with incomplete descendant coverage
    - Explanation of Cohort Extractor vs ehrQL behavior differences
    - Current event counts vs. expected counts with prefix matching
@@ -228,7 +227,6 @@ python3 reporting/generate_consolidated_reports.py
 **Key Features**:
 
 - **Moved Codes Report**:
-
   - Searches all opensafely organization repositories for moved codes
   - Groups findings by affected project
   - Shows all-time usage totals from "all diagnoses" field in APCS data
@@ -236,7 +234,6 @@ python3 reporting/generate_consolidated_reports.py
   - Custom messaging for different code groups (G906, K58*, U* codes)
 
 - **Prefix Matching Report**:
-
   - Lists projects using codelists with incomplete descendant coverage
   - Shows three scenarios for each affected codelist:
     - **Exact match**: Only codes explicitly in codelist (2024-25 primary diagnosis counts)
@@ -268,17 +265,17 @@ Run the scripts in this order for a complete analysis:
 
 ```bash
 # 1. Generate core usage data and identify missing codes
-python3 reporting/missing_codes.py
+python3 -m reporting.missing_codes
 
 # 2. Analyze codelist coverage (requires output from step 1)
-python3 reporting/analyze_codelist_coverage.py
+python3 -m reporting.analyze_codelist_coverage
 
 # 3. Analyze prefix matching impact (requires output from step 2)
-python3 reporting/analyze_prefix_matching.py
+python3 -m reporting.analyze_prefix_matching
 
 # 4. Generate consolidated reports (requires output from steps 1-3, and gh CLI)
 gh auth login  # if not already authenticated
-python3 reporting/generate_consolidated_reports.py
+python3 -m reporting.generate_consolidated_reports
 
 # Alternative: Generate per-repo emails instead of consolidated reports
 python3 reporting/create_emails_for_moved_code_repos.py
@@ -308,3 +305,8 @@ reporting/outputs/
 - Suppressed values (<15) are treated as 0
 - The analysis uses the 2019 edition of ICD-10 from OpenCodelists
 - APCS data uses a modified 2016 version with some differences from the 2019 edition
+
+## Other scripts
+
+- `reporting/analyze_orphan_codes.py` - Identifies codes that exist in a codelist, but where none of its children do - probably should call this childless rather than orphan.
+- `reporting/generate_codelist_issues_report.py` - Check - might be able to remove this
