@@ -17,7 +17,6 @@ Usage:
     python analyze_prefix_matching.py
 """
 
-import argparse
 import csv
 import json
 from collections import defaultdict
@@ -57,7 +56,8 @@ def load_coverage_data():
     with open(INPUT_FILE) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            data.append(row)
+            if row.get("Exists in ehrQL repo") == "Y":
+                data.append(row)
     return data
 
 
@@ -687,9 +687,47 @@ def write_unaffected_table(
 # ============================================================================
 
 
+def calculate_x_padding_events(codelist_id):
+    """Calculate event count with X-padding for a codelist.
+
+    X-padding adds 4-character codes ending in X where the 3-character prefix
+    is in the codelist (e.g., I81 -> I81X).
+
+    Returns the additional event count from X-padding.
+    """
+    codelist_rows = [r for r in load_coverage_data() if r["codelist_id"] == codelist_id]
+
+    # Get codes that are in the codelist (status = COMPLETE/PARTIAL/NONE)
+    codelist_codes = {
+        r["icd10_code"]
+        for r in codelist_rows
+        if r["status"] in ["COMPLETE", "PARTIAL", "NONE"]
+    }
+
+    # Get 3-character codes in the codelist
+    three_char_codes = {code for code in codelist_codes if len(code) == 3}
+
+    # Get EXTRA codes
+    extra_codes = [r for r in codelist_rows if r["status"] == "EXTRA"]
+
+    # Count EXTRA codes that are 4-char ending in X where 3-char prefix is in codelist
+    x_padding_primary = 0
+    for extra_row in extra_codes:
+        extra_code = extra_row["icd10_code"]
+        if len(extra_code) == 4 and extra_code.endswith("X"):
+            prefix = extra_code[:3]
+            if prefix in three_char_codes:
+                x_padding_primary += parse_count(extra_row["apcs_primary_count"])
+
+    return x_padding_primary
+
+
 def load_prefix_matching_results():
     """Load the prefix matching analysis results and find codelists with discrepancies."""
     discrepancies = []
+
+    # Cache the coverage data to avoid reloading
+    coverage_data_cache = load_coverage_data()
 
     with open(OUTPUT_CSV) as f:
         reader = csv.DictReader(f)
@@ -704,6 +742,37 @@ def load_prefix_matching_results():
                 # Take max of strict_primary and none_primary
                 with_prefix_matching = max(strict_primary, none_primary)
 
+                # Calculate X-padding
+                codelist_rows = [
+                    r for r in coverage_data_cache if r["codelist_id"] == codelist_id
+                ]
+
+                # Get codes that are in the codelist (status = COMPLETE/PARTIAL/NONE)
+                codelist_codes = {
+                    r["icd10_code"]
+                    for r in codelist_rows
+                    if r["status"] in ["COMPLETE", "PARTIAL", "NONE"]
+                }
+
+                # Get 3-character codes in the codelist
+                three_char_codes = {code for code in codelist_codes if len(code) == 3}
+
+                # Get EXTRA codes
+                extra_codes = [r for r in codelist_rows if r["status"] == "EXTRA"]
+
+                # Count EXTRA codes that are 4-char ending in X where 3-char prefix is in codelist
+                x_padding_primary = 0
+                for extra_row in extra_codes:
+                    extra_code = extra_row["icd10_code"]
+                    if len(extra_code) == 4 and extra_code.endswith("X"):
+                        prefix = extra_code[:3]
+                        if prefix in three_char_codes:
+                            x_padding_primary += parse_count(
+                                extra_row["apcs_primary_count"]
+                            )
+
+                with_x_padding = baseline_primary + x_padding_primary
+
                 # Calculate percentage increase from baseline to with_prefix_matching
                 if baseline_primary > 0:
                     pct_diff = (
@@ -717,6 +786,7 @@ def load_prefix_matching_results():
                     {
                         "codelist_id": codelist_id,
                         "baseline_primary": baseline_primary,
+                        "with_x_padding": with_x_padding,
                         "with_prefix_matching": with_prefix_matching,
                         "pct_difference": pct_diff,
                     }
@@ -794,6 +864,7 @@ def map_to_repos():
                         "repo": repo,
                         "codelist": codelist_id,
                         "current_event_count": disc["baseline_primary"],
+                        "event_count_with_x_padding": disc["with_x_padding"],
                         "event_count_with_prefix_matching": disc[
                             "with_prefix_matching"
                         ],
@@ -807,6 +878,7 @@ def map_to_repos():
                     "repo": "(not found in repos)",
                     "codelist": codelist_id,
                     "current_event_count": disc["baseline_primary"],
+                    "event_count_with_x_padding": disc["with_x_padding"],
                     "event_count_with_prefix_matching": disc["with_prefix_matching"],
                     "percentage_increase": pct_str,
                 }
@@ -824,6 +896,7 @@ def map_to_repos():
                 "repo",
                 "codelist",
                 "current_event_count",
+                "event_count_with_x_padding",
                 "event_count_with_prefix_matching",
                 "percentage_increase",
             ],
