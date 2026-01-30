@@ -139,7 +139,7 @@ def load_prefix_matching_warnings():
     """Load prefix matching warnings per repo from prefix_matching_repos.csv.
 
     Returns:
-        dict: {repo: [{"codelist": str, "current": int, "with_prefix": int, "pct": str}]}
+        dict: {repo: [{"codelist": str, "current": int, "x_padded": int, "with_prefix": int}]}
     """
     warnings = defaultdict(list)
 
@@ -156,6 +156,7 @@ def load_prefix_matching_warnings():
                 repo = row.get("repo", "").strip()
                 codelist = row.get("codelist", "").strip()
                 current = row.get("current_event_count", "0").strip()
+                x_padded = row.get("event_count_with_x_padding", "0").strip()
                 with_prefix = row.get("event_count_with_prefix_matching", "0").strip()
 
                 # Skip repos marked as not found
@@ -170,6 +171,7 @@ def load_prefix_matching_warnings():
                     {
                         "codelist": codelist,
                         "current": current,
+                        "x_padded": x_padded,
                         "with_prefix": with_prefix,
                     }
                 )
@@ -411,12 +413,26 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
                 "you may be under-ascertaining cases."
             )
             email_lines.append("")
+            email_lines.append(
+                "There are two distinct issues. The first is that the HES APCS data pads any 3 character "
+                "codes with an 'X' to make them 4 characters long. So C19 would appear in the data as C19X. "
+                "Some users handle this in their ehrQL by manually adding 'X' padded versions of their codes "
+                "to their codelists. The second issue, is that there are 5 character codes in ICD-10 that "
+                "do not appear in OpenCodelists. The figures below show how many events are found when using "
+                "your current codelist, how many when adding 'X' padding, and how many when using full prefix matching."
+            )
+            email_lines.append("")
+            email_lines.append(
+                "**NB: event counts are for the `primary_diagnosis` field in the HES APCS data for April 2024 to March 2025.**"
+            )
+            email_lines.append("")
             email_lines.append("**Affected Codelists:**")
             email_lines.append("")
 
             for warning in warnings:
                 codelist = warning["codelist"]
                 current = warning["current"]
+                x_padded = warning["x_padded"]
                 with_prefix = warning["with_prefix"]
 
                 # Format numbers with commas
@@ -426,13 +442,21 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
                     current_formatted = current
 
                 try:
+                    x_padded_formatted = f"{int(x_padded):,}"
+                except ValueError:
+                    x_padded_formatted = x_padded
+
+                try:
                     with_prefix_formatted = f"{int(with_prefix):,}"
                 except ValueError:
                     with_prefix_formatted = with_prefix
 
                 email_lines.append(f"- **`{codelist}`**")
                 email_lines.append(f"  - Current events: {current_formatted}")
-                email_lines.append(f"  - With prefix matching: {with_prefix_formatted}")
+                email_lines.append(f"  - With 'X' padding: {x_padded_formatted}")
+                email_lines.append(
+                    f"  - With full prefix matching: {with_prefix_formatted}"
+                )
 
             email_lines.append("")
             email_lines.append("---")
@@ -496,7 +520,9 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
 
         # Add warning header for moved codes section if there are any groups to show
         if any(set(group.get("codes", [])) & repo_codes for group in groups):
-            email_lines.append("### ⚠️  Moved ICD-10 Codes")
+            email_lines.append(
+                "### ⚠️  Codes that moved between the 2016 and 2019 editions of ICD-10"
+            )
             email_lines.append("")
             email_lines.append(
                 "The following ICD-10 codes appear in your study but have been moved or changed "
