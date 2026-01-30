@@ -13,11 +13,11 @@ Generates separate reports for APCS and ONS deaths data.
 import csv
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from .common import (
     CACHE_DIR,
     find_code_column,
+    get_output_file,
     load_all_icd10_codelists_from_rsi,
     load_codelist,
     load_icd10_codelists,
@@ -25,10 +25,6 @@ from .common import (
     load_rsi_codelists,
     load_usage_data,
 )
-
-
-# Paths
-REPO_ROOT = Path(__file__).parent.parent
 
 
 def get_descendants(code, all_codes):
@@ -369,12 +365,8 @@ def analyze_data_source(
         )
         results.append(result)
 
-    suffix = "apcs" if data_source == "apcs" else "ons_deaths"
-
     # Write CSV report
-    csv_file = (
-        REPO_ROOT / "reporting" / "outputs" / f"codelist_coverage_detail_{suffix}.csv"
-    )
+    csv_file = get_output_file(data_source)
     print(f"Writing CSV detail to {csv_file}...", file=sys.stderr)
     write_csv_report(
         results,

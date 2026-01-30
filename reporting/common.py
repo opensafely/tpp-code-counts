@@ -19,6 +19,9 @@ USAGE_FILE_APCS = OUT_DIR / "code_usage_combined_apcs.csv"
 USAGE_FILE_ONS_DEATHS = OUT_DIR / "code_usage_combined_ons_deaths.csv"
 EHRQL_JSON_FILE = DATA_DIR / "ehrql_codelists.json"
 RSI_JSON_FILE = DATA_DIR / "rsi-codelists-analysis.json"
+COVERAGE_APCS_FILE = OUT_DIR / "codelist_coverage_detail_apcs.csv"
+COVERAGE_ONS_DEATHS_FILE = OUT_DIR / "codelist_coverage_detail_ons_deaths.csv"
+REPOS_OUTPUT_FILE = OUT_DIR / "prefix_matching_repos.csv"
 
 
 def load_ocl_codes() -> set:
@@ -416,3 +419,70 @@ def is_icd10_code(code):
     # But X should only appear as the 4th character (position 3)
     pattern = r"^[A-Z]\d{2}[0-9X]?[0-9]?$"
     return bool(re.match(pattern, code))
+
+
+def load_ehrql_codelists_to_repos():
+    """Load ehrql_codelists.json and map codelists to repos that use them.
+
+    Returns:
+        Dict of {codelist_id: set(repos)}
+    """
+    data = _get_ehrql_data()
+
+    # First, build a mapping of file_hash -> set of repos that use it
+    # projects[repo][commit] = file_hash
+    file_hash_to_repos = defaultdict(set)
+    projects = data.get("projects", {})
+    for repo_name, commit_dict in projects.items():
+        if isinstance(commit_dict, dict):
+            for commit_hash, file_hash in commit_dict.items():
+                file_hash_to_repos[file_hash].add(repo_name)
+
+    # Build mapping: codelist_id -> set of repos
+    codelist_to_repos = defaultdict(set)
+
+    # Navigate signatures structure: hash -> filename -> variable -> codelist_list
+    signatures = data.get("signatures", {})
+    for file_hash, files in signatures.items():
+        # Get repos that use this file hash
+        repos_for_hash = file_hash_to_repos.get(file_hash, set())
+
+        for filename, variables in files.items():
+            for variable_name, codelist_list in variables.items():
+                # codelist_list is a list of entries, each starting with codelist_id
+                for entry in codelist_list:
+                    if entry and len(entry) > 0:
+                        codelist_id = entry[0]
+                        if codelist_id and codelist_id != "<inline>":
+                            # Add all repos that use this file hash
+                            codelist_to_repos[codelist_id].update(repos_for_hash)
+
+    return codelist_to_repos
+
+
+def get_output_file(data_source):
+    """Get the coverage output file path for a given data source."""
+    if data_source == "apcs":
+        return COVERAGE_APCS_FILE
+    elif data_source == "ons_deaths":
+        return COVERAGE_ONS_DEATHS_FILE
+    else:
+        raise ValueError(f"Unknown data source: {data_source}")
+
+
+_coverage_data = []
+
+
+def get_apcs_coverage_data():
+    """Load the codelist coverage detail CSV."""
+    global _coverage_data
+    if len(_coverage_data) > 0:
+        return _coverage_data
+
+    _coverage_data = []
+    with open(COVERAGE_APCS_FILE) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("Exists in ehrQL repo") == "Y":
+                _coverage_data.append(row)
+    return _coverage_data

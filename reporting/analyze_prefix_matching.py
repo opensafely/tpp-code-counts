@@ -18,19 +18,18 @@ Usage:
 """
 
 import csv
-import json
-from collections import defaultdict
-from pathlib import Path
+
+from .common import (
+    OUT_DIR,
+    REPOS_OUTPUT_FILE,
+    get_apcs_coverage_data,
+    load_ehrql_codelists_to_repos,
+)
 
 
 # Paths
-REPO_ROOT = Path(__file__).parent.parent
-OUT_DIR = REPO_ROOT / "reporting" / "outputs"
-INPUT_FILE = OUT_DIR / "codelist_coverage_detail_apcs.csv"
 OUTPUT_CSV = OUT_DIR / "prefix_matching_analysis.csv"
 OUTPUT_MD = OUT_DIR / "prefix_matching_analysis.md"
-EHRQL_JSON_FILE = REPO_ROOT / "reporting" / "data" / "ehrql_codelists.json"
-REPOS_OUTPUT_FILE = OUT_DIR / "prefix_matching_repos.csv"
 
 
 # ============================================================================
@@ -48,17 +47,6 @@ def parse_count(value):
 def is_descendant(child, parent):
     """Check if child is a descendant of parent code."""
     return child.startswith(parent) and len(child) > len(parent)
-
-
-def load_coverage_data():
-    """Load the codelist coverage detail CSV."""
-    data = []
-    with open(INPUT_FILE) as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("Exists in ehrQL repo") == "Y":
-                data.append(row)
-    return data
 
 
 def get_codelist_codes(data, codelist_id):
@@ -254,7 +242,7 @@ def analyze_all_count(codelist_rows):
 def run_analysis():
     """Run the prefix matching analysis and generate outputs."""
     print("Loading data...")
-    data = load_coverage_data()
+    data = get_apcs_coverage_data()
 
     # Group by codelist
     codelists = {}
@@ -695,7 +683,9 @@ def calculate_x_padding_events(codelist_id):
 
     Returns the additional event count from X-padding.
     """
-    codelist_rows = [r for r in load_coverage_data() if r["codelist_id"] == codelist_id]
+    codelist_rows = [
+        r for r in get_apcs_coverage_data() if r["codelist_id"] == codelist_id
+    ]
 
     # Get codes that are in the codelist (status = COMPLETE/PARTIAL/NONE)
     codelist_codes = {
@@ -726,8 +716,7 @@ def load_prefix_matching_results():
     """Load the prefix matching analysis results and find codelists with discrepancies."""
     discrepancies = []
 
-    # Cache the coverage data to avoid reloading
-    coverage_data_cache = load_coverage_data()
+    coverage_data = get_apcs_coverage_data()
 
     with open(OUTPUT_CSV) as f:
         reader = csv.DictReader(f)
@@ -744,7 +733,7 @@ def load_prefix_matching_results():
 
                 # Calculate X-padding
                 codelist_rows = [
-                    r for r in coverage_data_cache if r["codelist_id"] == codelist_id
+                    r for r in coverage_data if r["codelist_id"] == codelist_id
                 ]
 
                 # Get codes that are in the codelist (status = COMPLETE/PARTIAL/NONE)
@@ -793,46 +782,6 @@ def load_prefix_matching_results():
                 )
 
     return discrepancies
-
-
-def load_ehrql_codelists_to_repos():
-    """Load ehrql_codelists.json and map codelists to repos that use them.
-
-    Returns:
-        Dict of {codelist_id: set(repos)}
-    """
-    with open(EHRQL_JSON_FILE) as f:
-        data = json.load(f)
-
-    # First, build a mapping of file_hash -> set of repos that use it
-    # projects[repo][commit] = file_hash
-    file_hash_to_repos = defaultdict(set)
-    projects = data.get("projects", {})
-    for repo_name, commit_dict in projects.items():
-        if isinstance(commit_dict, dict):
-            for commit_hash, file_hash in commit_dict.items():
-                file_hash_to_repos[file_hash].add(repo_name)
-
-    # Build mapping: codelist_id -> set of repos
-    codelist_to_repos = defaultdict(set)
-
-    # Navigate signatures structure: hash -> filename -> variable -> codelist_list
-    signatures = data.get("signatures", {})
-    for file_hash, files in signatures.items():
-        # Get repos that use this file hash
-        repos_for_hash = file_hash_to_repos.get(file_hash, set())
-
-        for filename, variables in files.items():
-            for variable_name, codelist_list in variables.items():
-                # codelist_list is a list of entries, each starting with codelist_id
-                for entry in codelist_list:
-                    if entry and len(entry) > 0:
-                        codelist_id = entry[0]
-                        if codelist_id and codelist_id != "<inline>":
-                            # Add all repos that use this file hash
-                            codelist_to_repos[codelist_id].update(repos_for_hash)
-
-    return codelist_to_repos
 
 
 def map_to_repos():
