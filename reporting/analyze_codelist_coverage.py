@@ -371,6 +371,47 @@ def load_icd10_codelists(rsi_map):
     return sorted(icd10_codelists), inline_codelists
 
 
+def load_all_icd10_codelists_from_rsi():
+    """Load ALL ICD-10 codelist versions from the RSI export.
+
+    This includes all public codelists (bristol, opensafely, ihme, etc.) AND
+    881 user/* codelists that are not available in the OpenCodelists API.
+
+    Returns:
+        List of codelist_ids (full version slug format)
+    """
+    if not RSI_JSON_FILE.exists():
+        print(
+            f"  WARNING: RSI codelists file not found at {RSI_JSON_FILE}",
+            file=sys.stderr,
+        )
+        return []
+
+    try:
+        with open(RSI_JSON_FILE) as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"  WARNING: Could not load RSI codelists: {e}", file=sys.stderr)
+        return []
+
+    all_versions = []
+    for item in data:
+        if item.get("coding_system") == "icd10":
+            for version in item.get("versions", []):
+                version_slug = version.get("slug")
+                if version_slug:
+                    # Add leading and trailing slashes to match EHRQL format
+                    # RSI has: user/name/hash -> we need: /user/name/hash/
+                    normalized_slug = "/" + version_slug + "/"
+                    all_versions.append(normalized_slug)
+
+    print(
+        f"  Found {len(all_versions)} ICD-10 codelist versions in RSI data",
+        file=sys.stderr,
+    )
+    return all_versions
+
+
 def analyze_codelist(
     codelist_id,
     codelist_codes,
@@ -379,6 +420,7 @@ def analyze_codelist(
     usage_data,
     creation_method,
     hierarchy_ocl_codes,
+    from_ehrql=False,
 ):
     """Analyze a single codelist for coverage."""
 
@@ -423,6 +465,7 @@ def analyze_codelist(
     return {
         "codelist_id": codelist_id,
         "creation_method": creation_method,
+        "from_ehrql": from_ehrql,
         "total_codes": len(codelist_codes),
         "codelist_codes": codelist_codes,  # Store the actual codes for CSV output
         "code_classifications": code_classifications,
@@ -468,10 +511,14 @@ def write_csv_report(
                     usage_columns.append(category)
     usage_columns = sorted(usage_columns)
 
+    # Sort results: EHRQL codelists first (from_ehrql=True), then others
+    results.sort(key=lambda r: (not r.get("from_ehrql", False), r["codelist_id"]))
+
     with open(output_file, "w", newline="") as f:
         fieldnames = [
             "codelist_id",
             "creation_method",
+            "Exists in ehrQL repo",
             "icd10_code",
             "status",
         ] + usage_columns
@@ -481,6 +528,7 @@ def write_csv_report(
         for result in results:
             codelist_id = result["codelist_id"]
             creation_method = result.get("creation_method", "")
+            from_ehrql_flag = "Y" if result.get("from_ehrql", False) else "N"
             # Use codelist_codes from result if available, otherwise try to reload
             if "codelist_codes" in result:
                 codelist_codes = result["codelist_codes"]
@@ -516,6 +564,7 @@ def write_csv_report(
                 row_data = {
                     "codelist_id": codelist_id,
                     "creation_method": creation_method,
+                    "Exists in ehrQL repo": from_ehrql_flag,
                     "icd10_code": code,
                     "status": status,
                 }
@@ -551,6 +600,7 @@ def write_csv_report(
                                 row_data = {
                                     "codelist_id": codelist_id,
                                     "creation_method": creation_method,
+                                    "Exists in ehrQL repo": from_ehrql_flag,
                                     "icd10_code": usage_code,
                                     "status": "EXTRA",
                                 }
@@ -566,7 +616,7 @@ def write_csv_report(
 
 
 def analyze_data_source(
-    data_source, ocl_codes, icd10_codelists, inline_codelists, rsi_map
+    data_source, ocl_codes, icd10_codelists, inline_codelists, rsi_map, ehrql_set
 ):
     """Analyze coverage for a specific data source (APCS or ONS deaths)."""
     source_label = "APCS" if data_source == "apcs" else "ONS Deaths"
@@ -612,6 +662,8 @@ def analyze_data_source(
                 if last_part in rsi_map:
                     creation_method = rsi_map[last_part]["creation_method"]
 
+        from_ehrql = codelist_id in ehrql_set
+
         result = analyze_codelist(
             codelist_id,
             codelist_codes,
@@ -620,6 +672,7 @@ def analyze_data_source(
             usage_data,
             creation_method,
             hierarchy_ocl_codes,
+            from_ehrql,
         )
         results.append(result)
 
@@ -640,6 +693,7 @@ def analyze_data_source(
             usage_data,
             creation_method="Inline",
             hierarchy_ocl_codes=hierarchy_ocl_codes,
+            from_ehrql=True,
         )
         results.append(result)
 
@@ -673,7 +727,7 @@ def main():
     print("\nLoading codelist metadata...", file=sys.stderr)
     rsi_map = load_rsi_codelists()
 
-    print("\nLoading ICD-10 codelists...", file=sys.stderr)
+    print("\nLoading ICD-10 codelists from EHRQL...", file=sys.stderr)
     icd10_codelists, inline_codelists = load_icd10_codelists(rsi_map)
     print(f"  Found {len(icd10_codelists)} named ICD-10 codelists", file=sys.stderr)
     print(
@@ -681,12 +735,40 @@ def main():
         file=sys.stderr,
     )
 
+    ehrql_set = set(icd10_codelists)
+
+    # Load ALL ICD-10 codelists from RSI (includes 881 user codelists)
+    print(
+        "\nLoading ALL ICD-10 codelist versions from RSI data...",
+        file=sys.stderr,
+    )
+    all_icd10_versions = load_all_icd10_codelists_from_rsi()
+
+    # Combine: EHRQL codelists + all RSI versions (deduplicated)
+    combined_codelists = list(set(icd10_codelists + all_icd10_versions))
+    print(
+        f"  Total unique ICD-10 codelist versions to analyze: {len(combined_codelists)}",
+        file=sys.stderr,
+    )
+
     # Analyze APCS
-    analyze_data_source("apcs", ocl_codes, icd10_codelists, inline_codelists, rsi_map)
+    analyze_data_source(
+        "apcs",
+        ocl_codes,
+        combined_codelists,
+        inline_codelists,
+        rsi_map,
+        ehrql_set,
+    )
 
     # Analyze ONS Deaths
     analyze_data_source(
-        "ons_deaths", ocl_codes, icd10_codelists, inline_codelists, rsi_map
+        "ons_deaths",
+        ocl_codes,
+        combined_codelists,
+        inline_codelists,
+        rsi_map,
+        ehrql_set,
     )
 
 
