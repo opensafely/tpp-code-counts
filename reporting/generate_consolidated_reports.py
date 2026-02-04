@@ -18,9 +18,10 @@ Usage:
 import csv
 import sys
 from collections import defaultdict
-from pathlib import Path
 
 from .common import (
+    DATA_DIR,
+    OUT_DIR,
     find_all_codes_in_github,
     get_apcs_coverage_data,
     load_prefix_matching_warnings,
@@ -29,9 +30,9 @@ from .common import (
 )
 
 
-MOVED_CODES_REPORT = Path(__file__).parent / "outputs" / "moved_codes_report.md"
-PREFIX_MATCHING_REPORT = Path(__file__).parent / "outputs" / "prefix_matching_report.md"
-REPO_PROJECT_NUMBER_FILE = Path(__file__).parent / "data" / "repo_projectnumber.csv"
+MOVED_CODES_REPORT = OUT_DIR / "moved_codes_report.md"
+PREFIX_MATCHING_REPORT = OUT_DIR / "prefix_matching_report.md"
+REPO_PROJECT_NUMBER_FILE = DATA_DIR / "repo_projectnumber.csv"
 
 
 def load_repo_project_numbers():
@@ -443,7 +444,7 @@ def main():
         prefix_warnings, usage_totals, codelist_codes, repo_project_map
     )
 
-    print(f"\n✓ Reports generated in {Path(__file__).parent / 'outputs'}/")
+    print(f"\n✓ Reports generated in {OUT_DIR}/")
 
 
 if __name__ == "__main__":

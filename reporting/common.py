@@ -761,6 +761,8 @@ def find_all_codes_in_github(codes: set[str], force: bool):
 
         # Save updated cache
         save_cache(all_results)
+    else:
+        all_results = cache
 
     return all_results
 
