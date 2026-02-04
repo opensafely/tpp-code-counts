@@ -14,342 +14,21 @@ Usage:
 """
 
 import base64
-import csv
 import json
-import re
-import subprocess
 import sys
-import time
 from collections import defaultdict
-from pathlib import Path
 
+from .common import (
+    REPORTING_DIR,
+    find_all_codes_in_github,
+    load_prefix_matching_warnings,
+    load_swapped_codes,
+    load_usage_data,
+    run_gh_command,
+)
 
-SWAPPED_CODES_FILE = Path(__file__).parent / "swapped_codes.json"
-OUTPUT_FILE = Path(__file__).parent / "github_code_search_report.md"
-EMAIL_OUTPUT_DIR = Path(__file__).parent / "repo_emails"
-CACHE_FILE = Path(__file__).parent / "data" / "github_code_search_cache.json"
-USAGE_FILE = Path(__file__).parent / "outputs" / "code_usage_combined_apcs.csv"
-PREFIX_MATCHING_FILE = Path(__file__).parent / "outputs" / "prefix_matching_repos.csv"
-GITHUB_API = "https://api.github.com"
 
-
-def run_gh_command(args):
-    """Run gh CLI command and return output.
-
-    Args:
-        args: List of arguments to pass to gh
-
-    Returns:
-        tuple: (success, output) where success is bool and output is str
-    """
-    try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        # Check for rate limit in stderr
-        if "API rate limit exceeded" in result.stderr:
-            print(
-                "\n⚠️  GitHub API rate limit exceeded. Waiting 60 seconds before retry..."
-            )
-            time.sleep(60)
-            # Retry once after waiting
-            result = subprocess.run(
-                ["gh"] + args,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-        return result.returncode == 0, result.stdout.strip()
-    except FileNotFoundError:
-        print("ERROR: gh CLI not found. Please install it: https://cli.github.com")
-        return False, ""
-    except subprocess.TimeoutExpired:
-        return False, ""
-
-
-def load_cache():
-    """Load cached search results.
-
-    Returns:
-        dict: {code: {repo: [matches]}}
-    """
-    if not CACHE_FILE.exists():
-        return {}
-
-    try:
-        with open(CACHE_FILE) as f:
-            return json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_cache(cache):
-    """Save search results to cache.
-
-    Args:
-        cache: dict of {code: {repo: [matches]}}
-    """
-    try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(cache, f, indent=2)
-    except OSError as e:
-        print(f"WARNING: Could not save cache: {e}")
-
-
-def load_usage_totals():
-    """Load usage totals per ICD10 code from code_usage_combined_apcs.csv.
-
-    Returns:
-        dict: {code: {"total": int}}
-    """
-    totals = {}
-    if not USAGE_FILE.exists():
-        print(f"WARNING: Usage file not found: {USAGE_FILE}")
-        return totals
-
-    try:
-        with open(USAGE_FILE) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                code = (row.get("icd10_code") or "").strip().upper()
-                value = (row.get("apcs_all_count") or "").strip()
-                if not code:
-                    continue
-
-                # Convert counts: numbers as ints; suppressed counts (<15) treated as 0
-                try:
-                    count = int(value)
-                except ValueError:
-                    count = 0
-
-                entry = totals.setdefault(code, {"total": 0})
-                entry["total"] += count
-    except OSError as e:
-        print(f"WARNING: Could not read usage file {USAGE_FILE}: {e}")
-
-    return totals
-
-
-def load_prefix_matching_warnings():
-    """Load prefix matching warnings per repo from prefix_matching_repos.csv.
-
-    Returns:
-        dict: {repo: [{"codelist": str, "current": int, "x_padded": int, "with_prefix": int}]}
-    """
-    warnings = defaultdict(list)
-
-    if not PREFIX_MATCHING_FILE.exists():
-        print(
-            f"INFO: Prefix matching file not found at {PREFIX_MATCHING_FILE}, skipping prefix matching warnings"
-        )
-        return warnings
-
-    try:
-        with open(PREFIX_MATCHING_FILE) as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                repo = row.get("repo", "").strip()
-                codelist = row.get("codelist", "").strip()
-                current = row.get("current_event_count", "0").strip()
-                x_padded = row.get("event_count_with_x_padding", "0").strip()
-                with_prefix = row.get("event_count_with_prefix_matching", "0").strip()
-
-                # Skip repos marked as not found
-                if repo == "(not found in repos)" or not repo:
-                    continue
-
-                # Remove opensafely/ prefix if present
-                if repo.startswith("opensafely/"):
-                    repo = repo.replace("opensafely/", "")
-
-                warnings[repo].append(
-                    {
-                        "codelist": codelist,
-                        "current": current,
-                        "x_padded": x_padded,
-                        "with_prefix": with_prefix,
-                    }
-                )
-    except OSError as e:
-        print(
-            f"WARNING: Could not read prefix matching file {PREFIX_MATCHING_FILE}: {e}"
-        )
-
-    return warnings
-
-
-def should_exclude_line(line, path):
-    """Check if a line should be excluded based on filtering rules.
-
-    Args:
-        line: The line of code to check
-        path: The file path
-
-    Returns:
-        bool: True if the line should be excluded, False otherwise
-    """
-    # Rule 1: Exclude if line contains "U12 small nuclear mutation"
-    if "U12 small nuclear mutation" in line:
-        return True
-
-    # Rule 2: Exclude if line starts with "U***,Unspecified diagnostic imaging"
-    # where * is a numeric character
-    if re.match(r"^U\d\d\d,Unspecified diagnostic imaging", line):
-        return True
-
-    # Rule 3: Exclude if filename contains "opcs" (case-insensitive)
-    if "opcs" in path.lower():
-        return True
-
-    # Rule 4: Exclude if code line is like "K58*,Percutaneous"
-    if re.match(r"^K58\d,Percutaneous", line):
-        return True
-
-    # Rule 5: Exclude U10 - Falls as that is CTV3, not ICD10
-    if re.match(r"^U10.*Falls", line):
-        return True
-
-    # Rule 6: Exclude K588 - Other specified diagnostic transluminal operations
-    if re.match(r"^K588,Other specified diagnostic transluminal operations", line):
-        return True
-
-    return False
-
-
-def search_code_in_org(code):
-    """Search for a code in all opensafely repos with a single API call.
-
-    Args:
-        code: ICD-10 code to search for
-
-    Returns:
-        dict: {repo_name: [matching_lines]}
-    """
-    results = defaultdict(list)
-
-    print(f"  Searching for {code}...", end="", flush=True)
-
-    # Construct the query: "CODE" org:opensafely
-    query = f'"{code}"+org:opensafely'
-
-    success, output = run_gh_command(
-        [
-            "api",
-            "-H",
-            "Accept: application/vnd.github.text-match+json",
-            f"/search/code?q={query}",
-        ]
-    )
-
-    if not success:
-        print(" ERROR: API call failed")
-        return results
-
-    if success and output:
-        try:
-            data = json.loads(output)
-
-            # Check for rate limit error
-            if "message" in data and "rate limit" in data["message"].lower():
-                print(" RATE LIMITED")
-                return results
-
-            items = data.get("items", [])
-
-            for item in items:
-                path = item.get("path", "")
-                repo_full_name = item.get("repository", {}).get("full_name", "")
-
-                # Extract line text from text_matches
-                line_texts = []
-                text_matches = item.get("text_matches", [])
-                if text_matches:
-                    for match in text_matches:
-                        fragment = match.get("fragment", "")
-                        if fragment:
-                            # Split fragment into lines and find lines containing the code
-                            lines = fragment.split("\n")
-                            for line in lines:
-                                # Check if this line contains the exact code we're searching for
-                                # Look for the code as a distinct word (capital letters/numbers)
-                                if re.search(r"\b" + re.escape(code) + r"\b", line):
-                                    # Strip whitespace and only add if not empty
-                                    clean_line = line.strip()
-                                    if clean_line:
-                                        # Apply filtering rules to exclude false positives
-                                        if should_exclude_line(clean_line, path):
-                                            continue
-                                        line_texts.append(clean_line)
-
-                # If no matching lines found, skip this match
-                if not line_texts:
-                    continue
-
-                # Extract just the repo name from opensafely/repo-name format
-                if repo_full_name.startswith("opensafely/"):
-                    repo = repo_full_name.replace("opensafely/", "")
-                else:
-                    repo = repo_full_name
-
-                if path and repo:
-                    # Remove duplicates while preserving order
-                    seen = set()
-                    for line_text in line_texts:
-                        if line_text not in seen:
-                            seen.add(line_text)
-                            results[repo].append(
-                                {
-                                    "path": path,
-                                    "line_text": line_text,
-                                }
-                            )
-        except json.JSONDecodeError:
-            pass
-
-    found_count = len(results)
-    if found_count > 0:
-        total_matches = sum(len(matches) for matches in results.values())
-        print(f" found in {found_count} repo(s) ({total_matches} matches)")
-    else:
-        print(" (no results)")
-
-    # Convert defaultdict to regular dict for JSON serialization
-    return dict(results)
-
-
-def load_codes():
-    """Load codes from swapped_codes.json.
-
-    Returns:
-        tuple: (codes_dict, groups_list)
-            codes_dict: {code: description, ...}
-            groups_list: [{"codes": [...], "description": "..."}, ...]
-    """
-    if not SWAPPED_CODES_FILE.exists():
-        print(f"ERROR: {SWAPPED_CODES_FILE} not found")
-        return {}, []
-
-    try:
-        with open(SWAPPED_CODES_FILE) as f:
-            data = json.load(f)
-
-        codes = {}
-        # Expected format: [{"codes": [...], "description": "..."}, ...]
-        for entry in data:
-            description = entry.get("description", "")
-            for code in entry.get("codes", []):
-                codes[code] = description
-
-        print(f"Loaded {len(codes)} unique codes from swapped_codes.json\n")
-        return codes, data
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"ERROR loading codes: {e}")
-        return {}, []
+EMAIL_OUTPUT_DIR = REPORTING_DIR / "repo_emails"
 
 
 def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnings):
@@ -545,8 +224,10 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
             # Compose usage phrase for actual codes
             usage_phrases = []
             for ac in actual_codes:
-                entry = usage_totals.get(ac, {"total": 0})
-                usage_phrases.append(f"{ac} has occurred {entry.get('total', 0)} times")
+                entry = usage_totals.get(ac, {("apcs_all_count", "TOTAL"): 0})
+                usage_phrases.append(
+                    f"{ac} has occurred {entry.get(('apcs_all_count', 'TOTAL'), 0)} times"
+                )
             usage_text = "; ".join(usage_phrases)
 
             # Singular/plural wording based on count of present codes and actual codes
@@ -738,7 +419,7 @@ def main():
     force = "--force" in sys.argv
 
     # Check if gh CLI is available
-    success, output = run_gh_command(["--version"])
+    success, _ = run_gh_command(["--version"])
     if not success:
         print("ERROR: gh CLI not installed")
         print("\nSetup instructions:")
@@ -747,42 +428,12 @@ def main():
         print("3. Run this script again")
         sys.exit(1)
 
-    codes, groups = load_codes()
+    codes, groups = load_swapped_codes()
     if not codes:
         sys.exit(1)
 
-    # Load cache
-    cache = {} if force else load_cache()
-    if cache and not force:
-        print(f"Loaded {len(cache)} cached results (use --force to refresh)\n")
-
-    print(f"Searching opensafely org for {len(codes)} codes...\n")
-
-    all_results = {}
-    codes_to_search = []
-
-    # Check which codes need to be searched
-    for code in sorted(codes.keys()):
-        if code in cache and not force:
-            all_results[code] = cache[code]
-            print(f"  {code}: using cached results")
-        else:
-            codes_to_search.append(code)
-
-    # Search for codes not in cache
-    if codes_to_search:
-        print(f"\nFetching {len(codes_to_search)} code(s) from GitHub...\n")
-        for i, code in enumerate(codes_to_search):
-            all_results[code] = search_code_in_org(code)
-            # Add delay between searches to avoid rate limiting
-            if i < len(codes_to_search) - 1:
-                time.sleep(2)
-
-        # Save updated cache
-        save_cache(all_results)
-        print(f"\nCache saved to {CACHE_FILE}")
-
-    usage_totals = load_usage_totals()
+    all_results = find_all_codes_in_github(set(codes.keys()), force)
+    usage_totals, _ = load_usage_data("apcs")
     prefix_warnings = load_prefix_matching_warnings()
 
     if prefix_warnings:

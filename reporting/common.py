@@ -771,7 +771,7 @@ def load_prefix_matching_warnings():
     """Load prefix matching warnings per repo from prefix_matching_repos.csv.
 
     Returns:
-        dict: {repo: [{"codelist": str, "current": int, "with_prefix": int}]}
+        dict: {repo: [{"codelist": str, "current": int, "x_padded": int, "with_prefix": int}]}
     """
     warnings = defaultdict(list)
 
@@ -788,6 +788,7 @@ def load_prefix_matching_warnings():
                 repo = row.get("repo", "").strip()
                 codelist = row.get("codelist", "").strip()
                 current = row.get("current_event_count", "0").strip()
+                x_padded = row.get("event_count_with_x_padding", "0").strip()
                 with_prefix = row.get("event_count_with_prefix_matching", "0").strip()
 
                 # Skip repos marked as not found
@@ -798,21 +799,12 @@ def load_prefix_matching_warnings():
                 if repo.startswith("opensafely/"):
                     repo = repo.replace("opensafely/", "")
 
-                # Parse numbers for filtering
-                try:
-                    current_num = int(current)
-                    with_prefix_num = int(with_prefix)
-                except ValueError:
-                    current_num = 0
-                    with_prefix_num = 0
-
                 warnings[repo].append(
                     {
                         "codelist": codelist,
-                        "current": current_num,
-                        "with_prefix": with_prefix_num,
-                        "current_str": current,
-                        "with_prefix_str": with_prefix,
+                        "current": current,
+                        "x_padded": x_padded,
+                        "with_prefix": with_prefix,
                     }
                 )
     except OSError as e:
