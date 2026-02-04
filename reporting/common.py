@@ -2,7 +2,9 @@ import csv
 import hashlib
 import json
 import re
+import subprocess
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -10,8 +12,9 @@ from urllib.request import Request, urlopen
 
 
 REPO_ROOT = Path(__file__).parent.parent
-DATA_DIR = REPO_ROOT / "reporting" / "data"
-OUT_DIR = REPO_ROOT / "reporting" / "outputs"
+REPORTING_DIR = REPO_ROOT / "reporting"
+DATA_DIR = REPORTING_DIR / "data"
+OUT_DIR = REPORTING_DIR / "outputs"
 OUTPUT_DIR = REPO_ROOT / "output"
 OCL_ICD10_2019_CODES_FILE = DATA_DIR / "ocl_icd10_codes.txt"
 CACHE_DIR = DATA_DIR / "codelist_cache"
@@ -22,9 +25,11 @@ RSI_JSON_FILE = DATA_DIR / "rsi-codelists-analysis.json"
 COVERAGE_APCS_FILE = OUT_DIR / "codelist_coverage_detail_apcs.csv"
 COVERAGE_ONS_DEATHS_FILE = OUT_DIR / "codelist_coverage_detail_ons_deaths.csv"
 REPOS_OUTPUT_FILE = OUT_DIR / "prefix_matching_repos.csv"
+GITHUB_CACHE_FILE = DATA_DIR / "github_code_search_cache.json"
+SWAPPED_CODES_FILE = REPORTING_DIR / "swapped_codes.json"
 
 
-def load_ocl_codes() -> set:
+def load_ocl_codes() -> dict[str, set[str]]:
     """Load all ICD10 codes from OpenCodelists export.
     ONS death data is always 3 and 4 character ICD10 codes, while apcs
     pads 3 character codes without children with an X to make 4 character codes.
@@ -170,25 +175,34 @@ def load_usage_data(data_source):
     usage = defaultdict(lambda: defaultdict(int))
     raw_usage = defaultdict(lambda: defaultdict(str))
 
+    columns = (
+        ["apcs_primary_count", "apcs_secondary_count", "apcs_all_count"]
+        if data_source == "apcs"
+        else [
+            "ons_primary_count",
+            "ons_contributing_count",
+        ]
+    )
+
     with open(usage_file) as f:
         reader = csv.DictReader(f)
         for row in reader:
             code = row["icd10_code"]
             year = row["financial_year"]
 
-            # Process each count column
-            for col in reader.fieldnames:
-                if col not in ["icd10_code", "financial_year", "in_opencodelists"]:
-                    value = row[col]
-                    raw_usage[code][(col, year)] = value  # Store original value
+            if not code:
+                continue
 
-                    # Treat suppressed values like '<15' as 0
-                    if value.startswith("<"):
-                        count = 0
-                    else:
-                        count = int(value) if value else 0
+            for column in columns:
+                count_str = row.get(column, "")
+                count = parse_value(count_str)
+                raw_usage[code][(column, year)] = count_str
+                usage[code][(column, year)] += count
 
-                    usage[code][(col, year)] += count
+                if (column, "TOTAL") not in usage[code]:
+                    usage[code][(column, "TOTAL")] = count
+                else:
+                    usage[code][(column, "TOTAL")] += count
 
     return usage, raw_usage
 
@@ -290,29 +304,29 @@ def find_code_column(fieldnames):
     return None
 
 
-_ehrql_data = None
+_ehrql_data: dict = {}
 
 
-def _get_ehrql_data():
+def _get_ehrql_data() -> dict:
     global _ehrql_data
-    if _ehrql_data is None:
+    if not _ehrql_data:
         if not EHRQL_JSON_FILE.exists():
             print(
                 f"  WARNING: ehrql JSON file not found at {EHRQL_JSON_FILE}",
                 file=sys.stderr,
             )
-            return None
+            return {}
 
         try:
             with open(EHRQL_JSON_FILE) as f:
                 _ehrql_data = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
             print(f"  WARNING: Could not load ehrql JSON file: {e}", file=sys.stderr)
-            return None
+            return {}
     return _ehrql_data
 
 
-def extract_codelist_ids(json_path):
+def extract_codelist_ids():
     """Extract all unique codelist IDs from the signatures structure.
 
     Returns:
@@ -326,9 +340,9 @@ def extract_codelist_ids(json_path):
 
     # Navigate: signatures > hash > filename > variable_name > list of lists
     signatures = data.get("signatures", {})
-    for hash_value, files in signatures.items():
-        for filename, variables in files.items():
-            for variable_name, codelist_list in variables.items():
+    for _, files in signatures.items():
+        for _, variables in files.items():
+            for _, codelist_list in variables.items():
                 # codelist_list is a list of entries, each entry is [codelist_id, ...]
                 for entry in codelist_list:
                     if entry and len(entry) > 0:
@@ -359,7 +373,7 @@ def load_icd10_codelists(rsi_map):
         'id' (synthetic ID) and 'codes' (set of codes).
     """
     # Extract codelist IDs from ehrql file
-    codelist_ids, inline_tuples = extract_codelist_ids(EHRQL_JSON_FILE)
+    codelist_ids, inline_tuples = extract_codelist_ids()
 
     # Filter named codelists for ICD-10 only
     icd10_codelists = []
@@ -435,7 +449,7 @@ def load_ehrql_codelists_to_repos():
     projects = data.get("projects", {})
     for repo_name, commit_dict in projects.items():
         if isinstance(commit_dict, dict):
-            for commit_hash, file_hash in commit_dict.items():
+            for _, file_hash in commit_dict.items():
                 file_hash_to_repos[file_hash].add(repo_name)
 
     # Build mapping: codelist_id -> set of repos
@@ -447,8 +461,8 @@ def load_ehrql_codelists_to_repos():
         # Get repos that use this file hash
         repos_for_hash = file_hash_to_repos.get(file_hash, set())
 
-        for filename, variables in files.items():
-            for variable_name, codelist_list in variables.items():
+        for _, variables in files.items():
+            for _, codelist_list in variables.items():
                 # codelist_list is a list of entries, each starting with codelist_id
                 for entry in codelist_list:
                     if entry and len(entry) > 0:
@@ -470,19 +484,366 @@ def get_output_file(data_source):
         raise ValueError(f"Unknown data source: {data_source}")
 
 
+def parse_value(value):
+    """Parse a count value, treating suppressed values like '<15' as 0."""
+    if value.startswith("<"):
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
 _coverage_data = []
+_codelist_codes = defaultdict(list)
 
 
 def get_apcs_coverage_data():
     """Load the codelist coverage detail CSV."""
-    global _coverage_data
-    if len(_coverage_data) > 0:
-        return _coverage_data
+    global _coverage_data, _codelist_codes
+    if len(_coverage_data) > 0 and _codelist_codes:
+        return _coverage_data, _codelist_codes
 
     _coverage_data = []
+    _codelist_codes = defaultdict(list)
     with open(COVERAGE_APCS_FILE) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            if row.get("Exists in ehrQL repo") == "Y":
-                _coverage_data.append(row)
-    return _coverage_data
+            if row.get("Exists in ehrQL repo") != "Y":
+                continue
+            _coverage_data.append(row)
+            codelist_id = row.get("codelist_id", "").strip()
+            icd10_code = row.get("icd10_code", "").strip()
+            status = row.get("status", "").strip()
+            if not codelist_id or not icd10_code:
+                continue
+
+            # Only include codes that are in the codelist (COMPLETE, PARTIAL, NONE)
+            # Skip EXTRA codes as they're not part of the original codelist
+            if status in ("COMPLETE", "PARTIAL", "NONE"):
+                _codelist_codes[codelist_id].append(icd10_code)
+    return _coverage_data, _codelist_codes
+
+
+def load_cache():
+    """Load cached search results.
+
+    Returns:
+        dict: {code: {repo: [matches]}}
+    """
+    if not GITHUB_CACHE_FILE.exists():
+        return {}
+
+    try:
+        with open(GITHUB_CACHE_FILE) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_cache(cache):
+    """Save search results to cache.
+
+    Args:
+        cache: dict of {code: {repo: [matches]}}
+    """
+    try:
+        with open(GITHUB_CACHE_FILE, "w") as f:
+            json.dump(cache, f, indent=2)
+        print(f"\nCache saved to {GITHUB_CACHE_FILE}")
+    except OSError as e:
+        print(f"WARNING: Could not save cache: {e}")
+
+
+def run_gh_command(args):
+    """Run gh CLI command and return output.
+
+    Args:
+        args: List of arguments to pass to gh
+
+    Returns:
+        tuple: (success, output) where success is bool and output is str
+    """
+    try:
+        result = subprocess.run(
+            ["gh"] + args,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        # Check for rate limit in stderr
+        if "API rate limit exceeded" in result.stderr:
+            print(
+                "\n⚠️  GitHub API rate limit exceeded. Waiting 60 seconds before retry..."
+            )
+            time.sleep(60)
+            # Retry once after waiting
+            result = subprocess.run(
+                ["gh"] + args,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+        return result.returncode == 0, result.stdout.strip()
+    except FileNotFoundError:
+        print("ERROR: gh CLI not found. Please install it: https://cli.github.com")
+        return False, ""
+    except subprocess.TimeoutExpired:
+        return False, ""
+
+
+def should_exclude_line(line, path):
+    """Check if a line should be excluded based on filtering rules.
+
+    Args:
+        line: The line of code to check
+        path: The file path
+
+    Returns:
+        bool: True if the line should be excluded, False otherwise
+    """
+    # Rule 1: Exclude if line contains "U12 small nuclear mutation"
+    if "U12 small nuclear mutation" in line:
+        return True
+
+    # Rule 2: Exclude if line starts with "U***,Unspecified diagnostic imaging"
+    # where * is a numeric character
+    if re.match(r"^U\d\d\d,Unspecified diagnostic imaging", line):
+        return True
+
+    # Rule 3: Exclude if filename contains "opcs" (case-insensitive)
+    if "opcs" in path.lower():
+        return True
+
+    # Rule 4: Exclude if code line is like "K58*,Percutaneous"
+    if re.match(r"^K58\d,Percutaneous", line):
+        return True
+
+    # Rule 5: Exclude U10 - Falls as that is CTV3, not ICD10
+    if re.match(r"^U10.*Falls", line):
+        return True
+
+    # Rule 6: Exclude K588 - Other specified diagnostic transluminal operations
+    if re.match(r"^K588,Other specified diagnostic transluminal operations", line):
+        return True
+
+    return False
+
+
+def search_code_in_org(code):
+    """Search for a code in all opensafely repos with a single API call.
+
+    Args:
+        code: ICD-10 code to search for
+
+    Returns:
+        dict: {repo_name: [matching_lines]}
+    """
+    results = defaultdict(list)
+
+    print(f"  Searching for {code}...", end="", flush=True)
+
+    # Construct the query: "CODE" org:opensafely
+    query = f'"{code}"+org:opensafely'
+
+    success, output = run_gh_command(
+        [
+            "api",
+            "-H",
+            "Accept: application/vnd.github.text-match+json",
+            f"/search/code?q={query}",
+        ]
+    )
+
+    if not success:
+        print(" ERROR: API call failed")
+        return results
+
+    if success and output:
+        try:
+            data = json.loads(output)
+
+            # Check for rate limit error
+            if "message" in data and "rate limit" in data["message"].lower():
+                print(" RATE LIMITED")
+                return results
+
+            items = data.get("items", [])
+
+            for item in items:
+                path = item.get("path", "")
+                repo_full_name = item.get("repository", {}).get("full_name", "")
+
+                # Extract line text from text_matches
+                line_texts = []
+                text_matches = item.get("text_matches", [])
+                if text_matches:
+                    for match in text_matches:
+                        fragment = match.get("fragment", "")
+                        if fragment:
+                            # Split fragment into lines and find lines containing the code
+                            lines = fragment.split("\n")
+                            for line in lines:
+                                # Check if this line contains the exact code we're searching for
+                                # Look for the code as a distinct word (capital letters/numbers)
+                                if re.search(r"\b" + re.escape(code) + r"\b", line):
+                                    # Strip whitespace and only add if not empty
+                                    clean_line = line.strip()
+                                    if clean_line:
+                                        # Apply filtering rules to exclude false positives
+                                        if should_exclude_line(clean_line, path):
+                                            continue
+                                        line_texts.append(clean_line)
+
+                # If no matching lines found, skip this match
+                if not line_texts:
+                    continue
+
+                # Extract just the repo name from opensafely/repo-name format
+                if repo_full_name.startswith("opensafely/"):
+                    repo = repo_full_name.replace("opensafely/", "")
+                else:
+                    repo = repo_full_name
+
+                if path and repo:
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    for line_text in line_texts:
+                        if line_text not in seen:
+                            seen.add(line_text)
+                            results[repo].append(
+                                {
+                                    "path": path,
+                                    "line_text": line_text,
+                                }
+                            )
+        except json.JSONDecodeError:
+            pass
+
+    found_count = len(results)
+    if found_count > 0:
+        total_matches = sum(len(matches) for matches in results.values())
+        print(f" found in {found_count} repo(s) ({total_matches} matches)")
+    else:
+        print(" (no results)")
+
+    # Convert defaultdict to regular dict for JSON serialization
+    return dict(results)
+
+
+def find_all_codes_in_github(codes: set[str], force: bool):
+    # Check if gh CLI is available
+    success, _ = run_gh_command(["--version"])
+    if not success:
+        print("ERROR: gh CLI not installed")
+        print("\nSetup instructions:")
+        print("1. Install gh CLI: https://cli.github.com")
+        print("2. Authenticate: gh auth login")
+        print("3. Run this script again")
+        sys.exit(1)
+
+    cache = {} if force else load_cache()
+    if cache:
+        print(f"Loaded {len(cache)} cached results (pass force=True to refresh)\n")
+
+    all_results = {}
+
+    codes_to_search = codes - set(cache.keys())
+    if codes_to_search:
+        print(f"Searching GitHub for {len(codes_to_search)} codes...\n")
+        for i, code in enumerate(codes_to_search):
+            all_results[code] = search_code_in_org(code)
+            # Add delay between searches to avoid rate limiting
+            if i < len(codes_to_search) - 1:
+                time.sleep(2)
+
+        # Save updated cache
+        save_cache(all_results)
+
+    return all_results
+
+
+def load_prefix_matching_warnings():
+    """Load prefix matching warnings per repo from prefix_matching_repos.csv.
+
+    Returns:
+        dict: {repo: [{"codelist": str, "current": int, "with_prefix": int}]}
+    """
+    warnings = defaultdict(list)
+
+    if not REPOS_OUTPUT_FILE.exists():
+        print(
+            f"INFO: Prefix matching file not found at {REPOS_OUTPUT_FILE}, skipping prefix matching warnings"
+        )
+        return warnings
+
+    try:
+        with open(REPOS_OUTPUT_FILE) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                repo = row.get("repo", "").strip()
+                codelist = row.get("codelist", "").strip()
+                current = row.get("current_event_count", "0").strip()
+                with_prefix = row.get("event_count_with_prefix_matching", "0").strip()
+
+                # Skip repos marked as not found
+                if repo == "(not found in repos)" or not repo:
+                    continue
+
+                # Remove opensafely/ prefix if present
+                if repo.startswith("opensafely/"):
+                    repo = repo.replace("opensafely/", "")
+
+                # Parse numbers for filtering
+                try:
+                    current_num = int(current)
+                    with_prefix_num = int(with_prefix)
+                except ValueError:
+                    current_num = 0
+                    with_prefix_num = 0
+
+                warnings[repo].append(
+                    {
+                        "codelist": codelist,
+                        "current": current_num,
+                        "with_prefix": with_prefix_num,
+                        "current_str": current,
+                        "with_prefix_str": with_prefix,
+                    }
+                )
+    except OSError as e:
+        print(f"WARNING: Could not read prefix matching file {REPOS_OUTPUT_FILE}: {e}")
+
+    return warnings
+
+
+def load_swapped_codes():
+    """Load codes from swapped_codes.json.
+
+    Returns:
+        tuple: (codes_dict, groups_list)
+            codes_dict: {code: description, ...}
+            groups_list: [{"codes": [...], "description": "..."}, ...]
+    """
+    if not SWAPPED_CODES_FILE.exists():
+        print(f"ERROR: {SWAPPED_CODES_FILE} not found")
+        return {}, []
+
+    try:
+        with open(SWAPPED_CODES_FILE) as f:
+            data = json.load(f)
+
+        codes = {}
+        # Expected format: [{"codes": [...], "description": "..."}, ...]
+        for entry in data:
+            description = entry.get("description", "")
+            for code in entry.get("codes", []):
+                codes[code] = description
+
+        print(f"Loaded {len(codes)} unique codes from swapped_codes.json\n")
+        return codes, data
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR loading codes: {e}")
+        return {}, []

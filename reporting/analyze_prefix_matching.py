@@ -242,7 +242,7 @@ def analyze_all_count(codelist_rows):
 def run_analysis():
     """Run the prefix matching analysis and generate outputs."""
     print("Loading data...")
-    data = get_apcs_coverage_data()
+    data, _ = get_apcs_coverage_data()
 
     # Group by codelist
     codelists = {}
@@ -684,7 +684,7 @@ def calculate_x_padding_events(codelist_id):
     Returns the additional event count from X-padding.
     """
     codelist_rows = [
-        r for r in get_apcs_coverage_data() if r["codelist_id"] == codelist_id
+        r for r, _ in get_apcs_coverage_data() if r["codelist_id"] == codelist_id
     ]
 
     # Get codes that are in the codelist (status = COMPLETE/PARTIAL/NONE)
@@ -716,7 +716,7 @@ def load_prefix_matching_results():
     """Load the prefix matching analysis results and find codelists with discrepancies."""
     discrepancies = []
 
-    coverage_data = get_apcs_coverage_data()
+    coverage_data, _ = get_apcs_coverage_data()
 
     with open(OUTPUT_CSV) as f:
         reader = csv.DictReader(f)
