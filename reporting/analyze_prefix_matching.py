@@ -724,12 +724,22 @@ def load_prefix_matching_results():
             codelist_id = row["codelist_id"]
             baseline_primary = int(row.get("baseline_primary", 0))
             strict_primary = int(row.get("strict_primary", 0))
+            partial_primary = int(row.get("partial_primary", 0))
             none_primary = int(row.get("none_primary", 0))
 
             # Check if there's a discrepancy
-            if strict_primary != baseline_primary or none_primary > 0:
-                # Take max of strict_primary and none_primary
-                with_prefix_matching = max(strict_primary, none_primary)
+            # - strict != baseline: COMPLETE codes have EXTRA descendants
+            # - partial != strict: PARTIAL or NONE codes have EXTRA descendants
+            # - none > 0: Uploaded codelists with NONE codes have descendants
+            if (
+                strict_primary != baseline_primary
+                or partial_primary != strict_primary
+                or none_primary > 0
+            ):
+                # For prefix matching count:
+                # - Use partial_primary (includes descendants of all code types)
+                # - But for Uploaded codelists where none_primary > partial_primary, use none_primary
+                with_prefix_matching = max(partial_primary, none_primary)
 
                 # Calculate X-padding
                 codelist_rows = [

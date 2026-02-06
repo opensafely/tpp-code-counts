@@ -1,6 +1,6 @@
 # Prefix Matching Issues Report
 
-**Generated**: 2026-01-20 13:10:53
+**Generated**: 2026-02-06 16:40:56
 
 ## ⚠️  Prefix Matching Changes Between Cohort Extractor and ehrQL
 
@@ -40,6 +40,14 @@ For each affected project and each affected codelist, this report shows how many
 
 ### Affected Codelists:
 
+- **`/opensafely/erythema-multiforme-icd-10/327fb94f/`**
+  - Just the codelist: 270
+  - With X-padded codes: 270 (0% increase)
+  - With prefix matching: 420 (56% increase)
+- **`/opensafely/heavy-menstrual-bleeding-icd-10/0624f81a/`**
+  - Just the codelist: 13,670
+  - With X-padded codes: 13,670 (0% increase)
+  - With prefix matching: 14,870 (9% increase)
 - **`/user/RochelleKnight/stroke_isch_icd10/278d734e/`**
   - Just the codelist: 51,660
   - With X-padded codes: 53,190 (3% increase)
@@ -58,9 +66,9 @@ For each affected project and each affected codelist, this report shows how many
   - With prefix matching: 310
 
 **Total for COMPARES-vaccines:**
-- Exact match: 51,820 events
-- With X-padded codes: 54,060 events
-- With prefix matching: 57,360 events
+- Exact match: 65,760 events
+- With X-padded codes: 68,000 events
+- With prefix matching: 72,650 events
 
 ## JAKi-hosp
 
@@ -100,6 +108,10 @@ For each affected project and each affected codelist, this report shows how many
   - Just the codelist: 248,030
   - With X-padded codes: 248,370 (0% increase)
   - With prefix matching: 250,280 (1% increase)
+- **`/user/markdrussell/coronary-heart-disease-secondary-care/11159be6/`**
+  - Just the codelist: 87,200
+  - With X-padded codes: 87,200 (0% increase)
+  - With prefix matching: 87,440 (0% increase)
 - **`/user/markdrussell/crohns-disease-secondary-care/7ab8e8a6/`**
   - Just the codelist: 86,320
   - With X-padded codes: 86,320 (0% increase)
@@ -130,9 +142,9 @@ For each affected project and each affected codelist, this report shows how many
   - With prefix matching: 66,410 (3% increase)
 
 **Total for disease_incidence:**
-- Exact match: 604,240 events
-- With X-padded codes: 685,110 events
-- With prefix matching: 714,500 events
+- Exact match: 691,440 events
+- With X-padded codes: 772,310 events
+- With prefix matching: 801,940 events
 
 ## inflammatory_rheum
 
@@ -142,6 +154,10 @@ For each affected project and each affected codelist, this report shows how many
   - Just the codelist: 0
   - With X-padded codes: 2,160
   - With prefix matching: 2,870
+- **`/user/markdrussell/inflammatory-myositis-secondary-care/7ad5af04/`**
+  - Just the codelist: 1,720
+  - With X-padded codes: 1,720 (0% increase)
+  - With prefix matching: 4,140 (141% increase)
 - **`/user/markdrussell/psoriatic-arthritis-secondary-care/67a69bfb/`**
   - Just the codelist: 2,810
   - With X-padded codes: 2,810 (0% increase)
@@ -152,9 +168,9 @@ For each affected project and each affected codelist, this report shows how many
   - With prefix matching: 36,860 (68% increase)
 
 **Total for inflammatory_rheum:**
-- Exact match: 24,720 events
-- With X-padded codes: 26,880 events
-- With prefix matching: 43,030 events
+- Exact match: 26,440 events
+- With X-padded codes: 28,600 events
+- With prefix matching: 47,170 events
 
 ## metformin_covid
 
@@ -220,15 +236,19 @@ For each affected project and each affected codelist, this report shows how many
   - Just the codelist: 0
   - With X-padded codes: 310
   - With prefix matching: 310
+- **`/user/kurttaylor/depression_icd10/4dc56a05/`**
+  - Just the codelist: 3,250
+  - With X-padded codes: 3,250 (0% increase)
+  - With prefix matching: 3,850 (18% increase)
 - **`/user/r_denholm/type-2-diabetes-secondary-care-bristol/0b7f6cd4/`**
   - Just the codelist: 0
   - With X-padded codes: 0
   - With prefix matching: 17,750
 
 **Total for metformin_covid:**
-- Exact match: 321,320 events
-- With X-padded codes: 569,820 events
-- With prefix matching: 1,495,950 events
+- Exact match: 324,570 events
+- With X-padded codes: 573,070 events
+- With prefix matching: 1,499,800 events
 
 ## post-covid-vax-autoimmune
 
@@ -242,15 +262,19 @@ For each affected project and each affected codelist, this report shows how many
   - Just the codelist: 0
   - With X-padded codes: 22,520
   - With prefix matching: 23,940
+- **`/user/josephignace/hematologic-diseases-aplastic-anaemia-icd10/778a31a2/`**
+  - Just the codelist: 9,470
+  - With X-padded codes: 9,470 (0% increase)
+  - With prefix matching: 9,670 (2% increase)
 - **`/user/r_denholm/type-2-diabetes-secondary-care-bristol/0b7f6cd4/`**
   - Just the codelist: 0
   - With X-padded codes: 0
   - With prefix matching: 17,750
 
 **Total for post-covid-vax-autoimmune:**
-- Exact match: 0 events
-- With X-padded codes: 22,520 events
-- With prefix matching: 56,160 events
+- Exact match: 9,470 events
+- With X-padded codes: 31,990 events
+- With prefix matching: 65,830 events
 
 ## prophy_effects_Sotro_Molnup
 

@@ -278,7 +278,7 @@ gh auth login  # if not already authenticated
 python3 -m reporting.generate_consolidated_reports
 
 # Alternative: Generate per-repo emails instead of consolidated reports
-python3 reporting/create_emails_for_moved_code_repos.py
+python3 -m reporting.create_emails_for_moved_code_repos
 ```
 
 ## Output Directory Structure

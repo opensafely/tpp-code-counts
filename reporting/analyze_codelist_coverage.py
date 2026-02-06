@@ -95,7 +95,7 @@ def analyze_codelist(
     # Classify each code in the codelist as COMPLETE/PARTIAL/NONE
     code_classifications = {}
     for code in codelist_codes:
-        if code in ocl_codes:
+        if code in hierarchy_ocl_codes:
             classification = classify_code_descendants(
                 code, codelist_codes, hierarchy_ocl_codes
             )
@@ -215,18 +215,22 @@ def write_csv_report(
                                 if code:
                                     codelist_codes.add(code)
 
-            # Track which codes we've already written
+            # Collect all rows for this codelist before writing
+            rows_to_write = []
             written_codes = set()
-            # Track code statuses for EXTRA row filtering
-            code_statuses = {}
 
-            # First pass: write codes that are in the codelist and record their statuses
-            for code in sorted(codelist_codes):
-                # Determine status based on OCL descendants
-                status = classify_code_descendants(
-                    code, codelist_codes, hierarchy_ocl_codes
-                )
-                code_statuses[code] = status
+            # Get code classifications from result
+            code_classifications = result.get("code_classifications", {})
+
+            # First pass: collect codes that are in the codelist
+            for code in codelist_codes:
+                # Get status from pre-computed classifications
+                status = code_classifications.get(code)
+                if status is None:
+                    # Fallback to calculating
+                    status = classify_code_descendants(
+                        code, codelist_codes, hierarchy_ocl_codes
+                    )
 
                 # Get usage data for this code for 2024-25 (using raw values)
                 row_data = {
@@ -240,47 +244,47 @@ def write_csv_report(
                     raw_value = raw_usage.get(code, {}).get((col, "2024-25"), "")
                     row_data[col] = raw_value if raw_value else ""
 
-                writer.writerow(row_data)
+                rows_to_write.append(row_data)
                 written_codes.add(code)
 
-            # Second pass: add EXTRA codes from usage data that are descendants of non-NONE codes
-            # For "Uploaded" codelists, also include descendants of NONE codes
-            for usage_code in sorted(usage_data.keys()):
-                if usage_code not in codelist_codes:
+            # Second pass: collect EXTRA codes from usage data that are descendants
+            # of COMPLETE/PARTIAL codes, or NONE codes for uploaded codelists
+            for usage_code in usage_data.keys():
+                if usage_code not in written_codes:
                     # Check if this usage code is a descendant of any codelist code
-                    for parent_code, status in code_statuses.items():
-                        should_include = False
-
-                        # Include if descendant of non-NONE code
-                        if status != "NONE":
-                            should_include = True
+                    for parent_code, status in code_classifications.items():
+                        # Include descendants of COMPLETE and PARTIAL codes
                         # For uploaded codelists, also include descendants of NONE codes
-                        elif creation_method == "Uploaded" and status == "NONE":
-                            should_include = True
+                        should_include = status in ("COMPLETE", "PARTIAL") or (
+                            creation_method == "Uploaded" and status == "NONE"
+                        )
 
                         if (
                             should_include
                             and usage_code.startswith(parent_code)
                             and usage_code != parent_code
                         ):
-                            if usage_code not in written_codes:
-                                # This is an extra descendant
-                                row_data = {
-                                    "codelist_id": codelist_id,
-                                    "creation_method": creation_method,
-                                    "Exists in ehrQL repo": from_ehrql_flag,
-                                    "icd10_code": usage_code,
-                                    "status": "EXTRA",
-                                }
-                                for col in usage_columns:
-                                    raw_value = raw_usage.get(usage_code, {}).get(
-                                        (col, "2024-25"), ""
-                                    )
-                                    row_data[col] = raw_value if raw_value else ""
+                            # This is an extra descendant
+                            row_data = {
+                                "codelist_id": codelist_id,
+                                "creation_method": creation_method,
+                                "Exists in ehrQL repo": from_ehrql_flag,
+                                "icd10_code": usage_code,
+                                "status": "EXTRA",
+                            }
+                            for col in usage_columns:
+                                raw_value = raw_usage.get(usage_code, {}).get(
+                                    (col, "2024-25"), ""
+                                )
+                                row_data[col] = raw_value if raw_value else ""
 
-                                writer.writerow(row_data)
-                                written_codes.add(usage_code)
+                            rows_to_write.append(row_data)
+                            written_codes.add(usage_code)
                             break  # Don't add the same code multiple times
+
+            # Sort all rows by icd10_code and write them
+            for row_data in sorted(rows_to_write, key=lambda r: r["icd10_code"]):
+                writer.writerow(row_data)
 
 
 def analyze_data_source(

@@ -271,8 +271,6 @@ def load_codelist(codelist_id):
 
     Args:
         codelist_id: The codelist ID (string)
-        download: Force re-download
-        inline_codes: If provided and codelist_id starts with '<inline>', use these codes
 
     Returns:
         Set of codes, or None if loading failed
