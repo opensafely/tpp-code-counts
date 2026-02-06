@@ -404,9 +404,12 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
         files = repo_file_matches.get(repo, {})
 
         # Write per-repo text file for emailing
-        email_path = EMAIL_OUTPUT_DIR / f"{repo}.md"
+        # Extract repo name from "opensafely/repo-name" format
+        repo_name_only = repo.split("/")[-1] if "/" in repo else repo
+        email_path = EMAIL_OUTPUT_DIR / f"{repo_name_only}.md"
         try:
             email_text = format_repo_email_section(repo, files)
+            email_path.parent.mkdir(parents=True, exist_ok=True)
             with open(email_path, "w") as email_file:
                 email_file.write(email_text.strip() + "\n")
         except OSError as e:
