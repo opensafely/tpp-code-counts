@@ -94,7 +94,7 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
             email_lines.append("")
             email_lines.append(
                 "There are two distinct issues. The first is that the HES APCS data pads any 3 character "
-                "codes with an 'X' to make them 4 characters long. So C19 would appear in the data as C19X. "
+                "codes with an 'X' to make them 4 characters long. So `C19` would appear in the data as `C19X`. "
                 "Some users handle this in their ehrQL by manually adding 'X' padded versions of their codes "
                 "to their codelists. The second issue, is that there are 5 character codes in ICD-10 that "
                 "do not appear in OpenCodelists. The figures below show how many events are found when using "
@@ -204,7 +204,9 @@ def generate_repo_emails(all_results, codes, groups, usage_totals, prefix_warnin
             )
             email_lines.append("")
             email_lines.append(
-                "The following ICD-10 codes appear in your study but have been moved or changed "
+                "The HES APCS dataset in OpenSAFELY TPP uses the 2016 edition of ICD-10 "
+                "whereas OpenCodelists and the ONS Deaths data set use 2019. The following "
+                "ICD-10 codes appear in your study but have been moved or changed "
                 "between different editions of ICD-10. The codes you're using may not match what "
                 "appears in the actual data."
             )
