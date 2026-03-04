@@ -82,19 +82,21 @@ def mock_data_files(tmp_path, monkeypatch):
 
     # Create RSI codelists file
     rsi_file = data_dir / "rsi-codelists-analysis.json"
-    rsi_data = [
-        {
-            "full_slug": "test/codelist",
-            "coding_system": "icd10",
-            "versions": [
-                {
-                    "hash": "abc123",
-                    "full_slug": "test/codelist/abc123",
-                    "creation_method": "Builder",
-                }
-            ],
-        }
-    ]
+    rsi_data = {
+        "codelists": [
+            {
+                "full_slug": "test/codelist",
+                "coding_system": "icd10",
+                "versions": [
+                    {
+                        "hash": "abc123",
+                        "full_slug": "test/codelist/abc123",
+                        "creation_method": "Builder",
+                    }
+                ],
+            }
+        ]
+    }
     rsi_file.write_text(json.dumps(rsi_data))
 
     # Create a test codelist

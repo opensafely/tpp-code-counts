@@ -87,7 +87,7 @@ def _get_rsi_data():
         except (OSError, json.JSONDecodeError) as e:
             print(f"  WARNING: Could not load RSI codelists: {e}", file=sys.stderr)
             return None
-    return _rsi_data
+    return _rsi_data["codelists"]
 
 
 def load_rsi_codelists():
@@ -339,7 +339,9 @@ def extract_codelist_ids():
     # Navigate: signatures > hash > filename > variable_name > list of lists
     signatures = data.get("signatures", {})
     for _, files in signatures.items():
-        for _, variables in files.items():
+        for file_name, variables in files.items():
+            if file_name == "_unused_codelists":
+                continue
             for _, codelist_list in variables.items():
                 # codelist_list is a list of entries, each entry is [codelist_id, ...]
                 for entry in codelist_list:
@@ -459,7 +461,9 @@ def load_ehrql_codelists_to_repos():
         # Get repos that use this file hash
         repos_for_hash = file_hash_to_repos.get(file_hash, set())
 
-        for _, variables in files.items():
+        for file_name, variables in files.items():
+            if file_name == "_unused_codelists":
+                continue
             for _, codelist_list in variables.items():
                 # codelist_list is a list of entries, each starting with codelist_id
                 for entry in codelist_list:

@@ -225,15 +225,21 @@ def test_load_rsi_codelists(tmp_path, monkeypatch):
     data_dir.mkdir()
 
     rsi_file = data_dir / "rsi-codelists-analysis.json"
-    rsi_data = [
-        {
-            "slug": "user/test/codelist",
-            "coding_system": "icd10",
-            "versions": [
-                {"hash": "abc123", "tag": "2023-01-01", "creation_method": "Builder"}
-            ],
-        }
-    ]
+    rsi_data = {
+        "codelists": [
+            {
+                "slug": "user/test/codelist",
+                "coding_system": "icd10",
+                "versions": [
+                    {
+                        "hash": "abc123",
+                        "tag": "2023-01-01",
+                        "creation_method": "Builder",
+                    }
+                ],
+            }
+        ]
+    }
     rsi_file.write_text(json.dumps(rsi_data))
 
     monkeypatch.setattr(common, "RSI_JSON_FILE", rsi_file)
