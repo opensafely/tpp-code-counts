@@ -8,9 +8,9 @@ ICD10 codes appear in the admitted patient care spells (APCS) table in three fie
 
 ## Overall Summary
 
-- Total codelists analyzed: 89
-- Builder codelists: 34
-- Uploaded codelists: 41
+- Total codelists analyzed: 123
+- Builder codelists: 56
+- Uploaded codelists: 53
 - Inline codelists: 14
 
 A 'builder' codelist is one created using the OpenCodelists builder tool, whereas an 'uploaded' codelist is one uploaded directly by a user. 'Inline' codelists are hardcoded values in analysis code. They are reported separately in places because in the builder, children of included codes get automatically included (unless explicitly excluded), whereas in uploaded and inline codelists they are deliberately excluded.
@@ -33,16 +33,16 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 2,226,140 | - | - |
-| Strict | 2,728,900 | +502,760 | +22.58% |
-| Partial | 2,757,570 | +531,430 | +23.87% |
+| Baseline | 3,069,210 | - | - |
+| Strict | 3,722,640 | +653,430 | +21.29% |
+| Partial | 3,753,690 | +684,480 | +22.30% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 69/89 (77.5%) | 27/34 (79.4%) | 29/41 (70.7%) |
-| Partial vs Baseline | 61/89 (68.5%) | 21/34 (61.8%) | 27/41 (65.9%) |
+| Strict vs Baseline | 84/123 (68.3%) | 35/56 (62.5%) | 36/53 (67.9%) |
+| Partial vs Baseline | 77/123 (62.6%) | 30/56 (53.6%) | 34/53 (64.2%) |
 
 
 ### By Creation Method
@@ -51,25 +51,25 @@ For our analysis we report:
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 883,400 | - | - |
-| Strict | 1,098,440 | +215,040 | +24.34% |
-| Partial | 1,116,100 | +232,700 | +26.34% |
+| Baseline | 1,571,410 | - | - |
+| Strict | 1,894,020 | +322,610 | +20.53% |
+| Partial | 1,914,040 | +342,630 | +21.80% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 982,140 | - | - |
-| Strict | 1,207,280 | +225,140 | +22.92% |
-| Partial | 1,218,290 | +236,150 | +24.04% |
-| Lax | 2,227,150 | +1,245,010 | +126.77% |
+| Baseline | 1,137,200 | - | - |
+| Strict | 1,405,440 | +268,240 | +23.59% |
+| Partial | 1,416,470 | +279,270 | +24.56% |
+| Lax | 2,382,210 | +1,245,010 | +109.48% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 29/41 (70.7%) | - | 29/41 (70.7%) |
-| Partial vs Baseline | 27/41 (65.9%) | - | 27/41 (65.9%) |
-| Lax vs Baseline | 5/41 (12.2%) | - | 5/41 (12.2%) |
+| Strict vs Baseline | 36/53 (67.9%) | - | 36/53 (67.9%) |
+| Partial vs Baseline | 34/53 (64.2%) | - | 34/53 (64.2%) |
+| Lax vs Baseline | 6/53 (11.3%) | - | 6/53 (11.3%) |
 
 
 #### Inline Codelists
@@ -93,16 +93,16 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 2,096,270 | - | - |
-| Strict | 2,978,990 | +882,720 | +42.11% |
-| Partial | 2,988,720 | +892,450 | +42.57% |
+| Baseline | 3,247,890 | - | - |
+| Strict | 4,181,460 | +933,570 | +28.74% |
+| Partial | 4,213,360 | +965,470 | +29.73% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 69/89 (77.5%) | 27/34 (79.4%) | 29/41 (70.7%) |
-| Partial vs Baseline | 60/89 (67.4%) | 21/34 (61.8%) | 26/41 (63.4%) |
+| Strict vs Baseline | 83/123 (67.5%) | 34/56 (60.7%) | 36/53 (67.9%) |
+| Partial vs Baseline | 75/123 (61.0%) | 29/56 (51.8%) | 33/53 (62.3%) |
 
 
 ### By Creation Method
@@ -111,25 +111,25 @@ This field is exactly the same as the primary diagnosis field so we just repeat 
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 652,830 | - | - |
-| Strict | 709,090 | +56,260 | +8.62% |
-| Partial | 715,440 | +62,610 | +9.59% |
+| Baseline | 1,771,080 | - | - |
+| Strict | 1,862,910 | +91,830 | +5.18% |
+| Partial | 1,891,430 | +120,350 | +6.80% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Difference from Baseline | % Increase |
 |----------|-------------:|-------------------------:|-----------:|
-| Baseline | 1,169,930 | - | - |
-| Strict | 1,969,720 | +799,790 | +68.36% |
-| Partial | 1,973,100 | +803,170 | +68.65% |
-| Lax | 2,092,970 | +923,040 | +78.90% |
+| Baseline | 1,203,300 | - | - |
+| Strict | 2,018,370 | +815,070 | +67.74% |
+| Partial | 2,021,750 | +818,450 | +68.02% |
+| Lax | 2,126,340 | +923,040 | +76.71% |
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| Strict vs Baseline | 29/41 (70.7%) | - | 29/41 (70.7%) |
-| Partial vs Baseline | 26/41 (63.4%) | - | 26/41 (63.4%) |
-| Lax vs Baseline | 4/41 (9.8%) | - | 4/41 (9.8%) |
+| Strict vs Baseline | 36/53 (67.9%) | - | 36/53 (67.9%) |
+| Partial vs Baseline | 33/53 (62.3%) | - | 33/53 (62.3%) |
+| Lax vs Baseline | 6/53 (11.3%) | - | 6/53 (11.3%) |
 
 
 #### Inline Codelists
@@ -161,14 +161,14 @@ For our analysis we report:
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 14,074,580 | - | - |
-| With PARTIAL descendants (prefix matching) | 14,138,970 | +64,390 | +0.46% |
+| Baseline (codelist codes only) | 22,205,220 | - | - |
+| With PARTIAL descendants (prefix matching) | 22,533,250 | +328,030 | +1.48% |
 
 ### Unaffected Codelists
 
 | Comparison | All Codelists | Builder | Uploaded |
 |------------|--------------|---------|----------|
-| PARTIAL descendants vs Baseline | 75/89 (84.3%) | 25/34 (73.5%) | 36/41 (87.8%) |
+| PARTIAL descendants vs Baseline | 105/123 (85.4%) | 44/56 (78.6%) | 47/53 (88.7%) |
 
 
 ### By Creation Method
@@ -177,14 +177,14 @@ For our analysis we report:
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 4,630,270 | - | - |
-| With PARTIAL descendants (prefix matching) | 4,671,700 | +41,430 | +0.89% |
+| Baseline (codelist codes only) | 12,365,750 | - | - |
+| With PARTIAL descendants (prefix matching) | 12,670,560 | +304,810 | +2.46% |
 
 
 #### Uploaded Codelists
 
 | Scenario | Total Events | Inadvertent Inclusion | % Increase |
 |----------|-------------:|----------------------:|-----------:|
-| Baseline (codelist codes only) | 7,705,950 | - | - |
-| With PARTIAL descendants (prefix matching) | 7,728,910 | +22,960 | +0.30% |
+| Baseline (codelist codes only) | 8,101,110 | - | - |
+| With PARTIAL descendants (prefix matching) | 8,124,330 | +23,220 | +0.29% |
 
