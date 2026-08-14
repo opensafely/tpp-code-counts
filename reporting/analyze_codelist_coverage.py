@@ -10,9 +10,11 @@ For each codelist:
 Generates separate reports for APCS and ONS deaths data.
 """
 
+import argparse
 import csv
 import sys
 from collections import defaultdict
+from pathlib import Path
 
 from .common import (
     CACHE_DIR,
@@ -25,6 +27,23 @@ from .common import (
     load_rsi_codelists,
     load_usage_data,
 )
+
+
+ALLOWED_PREFIX_CODES_FILE = (
+    Path(__file__).parent / "data" / "prefix_matching_allowed_codes.txt"
+)
+
+
+def load_allowed_prefix_codes():
+    """Load the exact codes allowed to contribute additional prefix matches."""
+    with open(ALLOWED_PREFIX_CODES_FILE) as f:
+        return {line.strip() for line in f if line.strip()}
+
+
+def extra_code_is_allowed(code, parent_code, allowed_extra_codes):
+    """Allow X padding unconditionally; restrict other prefix descendants."""
+    is_x_padding = len(parent_code) == 3 and code == f"{parent_code}X"
+    return allowed_extra_codes is None or code in allowed_extra_codes or is_x_padding
 
 
 def get_descendants(code, all_codes):
@@ -89,6 +108,7 @@ def analyze_codelist(
     creation_method,
     hierarchy_ocl_codes,
     from_ehrql=False,
+    allowed_extra_codes=None,
 ):
     """Analyze a single codelist for coverage."""
 
@@ -116,7 +136,11 @@ def analyze_codelist(
         # Get all descendants from usage data
         usage_descendants = set()
         for usage_code in usage_codes:
-            if usage_code != code and usage_code.startswith(code):
+            if (
+                usage_code != code
+                and usage_code.startswith(code)
+                and extra_code_is_allowed(usage_code, code, allowed_extra_codes)
+            ):
                 usage_descendants.add(usage_code)
 
         # Missing = in usage but not in OCL
@@ -155,6 +179,7 @@ def write_csv_report(
     output_file,
     data_source,
     hierarchy_ocl_codes,
+    allowed_extra_codes=None,
 ):
     """Write detailed CSV report with code-level breakdown using raw values.
 
@@ -263,6 +288,9 @@ def write_csv_report(
                             should_include
                             and usage_code.startswith(parent_code)
                             and usage_code != parent_code
+                            and extra_code_is_allowed(
+                                usage_code, parent_code, allowed_extra_codes
+                            )
                         ):
                             # This is an extra descendant
                             row_data = {
@@ -288,7 +316,13 @@ def write_csv_report(
 
 
 def analyze_data_source(
-    data_source, ocl_codes, icd10_codelists, inline_codelists, rsi_map, ehrql_set
+    data_source,
+    ocl_codes,
+    icd10_codelists,
+    inline_codelists,
+    rsi_map,
+    ehrql_set,
+    allowed_extra_codes=None,
 ):
     """Analyze coverage for a specific data source (APCS or ONS deaths)."""
     source_label = "APCS" if data_source == "apcs" else "ONS Deaths"
@@ -345,6 +379,7 @@ def analyze_data_source(
             creation_method,
             hierarchy_ocl_codes,
             from_ehrql,
+            allowed_extra_codes,
         )
         results.append(result)
 
@@ -366,6 +401,7 @@ def analyze_data_source(
             creation_method="Inline",
             hierarchy_ocl_codes=hierarchy_ocl_codes,
             from_ehrql=True,
+            allowed_extra_codes=allowed_extra_codes,
         )
         results.append(result)
 
@@ -379,10 +415,34 @@ def analyze_data_source(
         csv_file,
         data_source,
         hierarchy_ocl_codes,
+        allowed_extra_codes,
     )
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--restrict-prefix-matching-codes",
+        action="store_true",
+        help=(
+            "Only allow additional prefix-matched codes listed in "
+            f"{ALLOWED_PREFIX_CODES_FILE}"
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    allowed_extra_codes = None
+    if args.restrict_prefix_matching_codes:
+        allowed_extra_codes = load_allowed_prefix_codes()
+        print(
+            f"Restricting additional prefix matches to "
+            f"{len(allowed_extra_codes)} codes from {ALLOWED_PREFIX_CODES_FILE}",
+            file=sys.stderr,
+        )
+
     print("Loading OCL ICD-10 codes...", file=sys.stderr)
     ocl_codes = load_ocl_codes()
     print(
@@ -427,6 +487,7 @@ def main():
         inline_codelists,
         rsi_map,
         ehrql_set,
+        allowed_extra_codes,
     )
 
     # Analyze ONS Deaths
@@ -437,6 +498,7 @@ def main():
         inline_codelists,
         rsi_map,
         ehrql_set,
+        allowed_extra_codes,
     )
 
 

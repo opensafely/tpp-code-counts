@@ -18,6 +18,7 @@ Usage:
 """
 
 import csv
+import json
 
 from .common import (
     OUT_DIR,
@@ -30,6 +31,7 @@ from .common import (
 # Paths
 OUTPUT_CSV = OUT_DIR / "prefix_matching_analysis.csv"
 OUTPUT_MD = OUT_DIR / "prefix_matching_analysis.md"
+PREFIX_DETAILS_FILE = OUT_DIR / "prefix_matching_details.json"
 
 
 # ============================================================================
@@ -794,11 +796,107 @@ def load_prefix_matching_results():
     return discrepancies
 
 
+def get_prefix_matching_code_details(codelist_id):
+    """Return the codes responsible for X-padding and modifier count changes."""
+    coverage_data, _ = get_apcs_coverage_data()
+    codelist_rows = [row for row in coverage_data if row["codelist_id"] == codelist_id]
+    original_rows = [row for row in codelist_rows if row["status"] != "EXTRA"]
+    extra_rows = [row for row in codelist_rows if row["status"] == "EXTRA"]
+    original_codes = {row["icd10_code"] for row in original_rows}
+
+    x_padded_codes = {
+        row["icd10_code"][:3]
+        for row in extra_rows
+        if len(row["icd10_code"]) == 4
+        and row["icd10_code"].endswith("X")
+        and row["icd10_code"][:3] in original_codes
+        and parse_count(row["apcs_primary_count"]) > 0
+    }
+    x_padded_rows = [
+        row
+        for row in extra_rows
+        if len(row["icd10_code"]) == 4
+        and row["icd10_code"].endswith("X")
+        and row["icd10_code"][:3] in original_codes
+    ]
+
+    complete_codes = {
+        row["icd10_code"] for row in original_rows if row["status"] == "COMPLETE"
+    }
+    partial_codes = {
+        row["icd10_code"] for row in original_rows if row["status"] == "PARTIAL"
+    }
+    none_codes = {row["icd10_code"] for row in original_rows if row["status"] == "NONE"}
+
+    def matches_partial_scenario(extra_code):
+        for parent in complete_codes:
+            if is_descendant(extra_code, parent) and (
+                len(parent) == 3 or (len(parent) == 4 and len(extra_code) >= 5)
+            ):
+                return True
+        return any(
+            len(parent) == 3 and is_descendant(extra_code, parent)
+            for parent in partial_codes
+        )
+
+    def matches_none_scenario(extra_code):
+        return any(
+            len(parent) == 3 and is_descendant(extra_code, parent)
+            for parent in none_codes
+        )
+
+    partial_analysis = analyze_primary_secondary(codelist_rows)
+    none_analysis = analyze_none_uploaded(codelist_rows)
+    use_none_scenario = (
+        none_analysis["none_primary"] > partial_analysis["partial_primary"]
+    )
+    selected_rows = [
+        row
+        for row in extra_rows
+        if (
+            matches_none_scenario(row["icd10_code"])
+            if use_none_scenario
+            else matches_partial_scenario(row["icd10_code"])
+        )
+    ]
+    modifier_codes = {
+        row["icd10_code"]
+        for row in selected_rows
+        if parse_count(row["apcs_primary_count"]) > 0
+        and not (
+            len(row["icd10_code"]) == 4
+            and row["icd10_code"].endswith("X")
+            and row["icd10_code"][:3] in original_codes
+        )
+    }
+    baseline_all = sum(parse_count(row["apcs_all_count"]) for row in original_rows)
+    return {
+        "x_padded_codes": sorted(x_padded_codes),
+        "modifier_codes": sorted(modifier_codes),
+        "baseline_all": baseline_all,
+        "with_x_padding_all": baseline_all
+        + sum(parse_count(row["apcs_all_count"]) for row in x_padded_rows),
+        "with_prefix_matching_all": baseline_all
+        + sum(parse_count(row["apcs_all_count"]) for row in selected_rows),
+    }
+
+
+def write_prefix_matching_code_details(discrepancies):
+    details = {
+        row["codelist_id"]: get_prefix_matching_code_details(row["codelist_id"])
+        for row in discrepancies
+    }
+    with open(PREFIX_DETAILS_FILE, "w") as f:
+        json.dump(details, f, indent=2)
+        f.write("\n")
+
+
 def map_to_repos():
     """Map codelists with discrepancies to GitHub repos."""
     print("\nLoading prefix matching discrepancies...")
     discrepancies = load_prefix_matching_results()
     print(f"  Found {len(discrepancies)} codelists with discrepancies")
+    write_prefix_matching_code_details(discrepancies)
 
     print("Loading ehrql codelists and repo mappings...")
     codelist_to_repos = load_ehrql_codelists_to_repos()

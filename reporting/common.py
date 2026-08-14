@@ -324,6 +324,18 @@ def _get_ehrql_data() -> dict:
     return _ehrql_data
 
 
+def _iter_signature_codelist_entries(files):
+    """Yield used and unused codelist entries from one ehrQL signature."""
+    for file_name, contents in files.items():
+        if file_name == "_unused_codelists":
+            codelist_lists = [contents]
+        else:
+            codelist_lists = contents.values()
+
+        for codelist_list in codelist_lists:
+            yield from codelist_list
+
+
 def extract_codelist_ids():
     """Extract all unique codelist IDs from the signatures structure.
 
@@ -336,31 +348,26 @@ def extract_codelist_ids():
     codelist_ids = set()
     inline_codelists = set()
 
-    # Navigate: signatures > hash > filename > variable_name > list of lists
+    # Navigate signatures, including the direct list under _unused_codelists.
     signatures = data.get("signatures", {})
     for _, files in signatures.items():
-        for file_name, variables in files.items():
-            if file_name == "_unused_codelists":
-                continue
-            for _, codelist_list in variables.items():
-                # codelist_list is a list of entries, each entry is [codelist_id, ...]
-                for entry in codelist_list:
-                    if entry and len(entry) > 0:
-                        # First element of each entry is the codelist ID
-                        codelist_id = entry[0]
-                        if codelist_id:
-                            if codelist_id == "<inline>":
-                                # For inline, extract codes from 4th element (index 3)
-                                # Should be "values={pipe separated list}"
-                                values_str = entry[3]
-                                codes = values_str[7:]  # Remove "values=" prefix
-                                # Split by pipe, sort, and create normalized representation
-                                code_list = [c.strip() for c in codes.split("|")]
-                                # Use sorted tuple as hashable unique identifier
-                                normalized = tuple(sorted(code_list))
-                                inline_codelists.add(normalized)
-                            else:
-                                codelist_ids.add(codelist_id)
+        for entry in _iter_signature_codelist_entries(files):
+            if entry and len(entry) > 0:
+                # First element of each entry is the codelist ID
+                codelist_id = entry[0]
+                if codelist_id:
+                    if codelist_id == "<inline>":
+                        # For inline, extract codes from 4th element (index 3)
+                        # Should be "values={pipe separated list}"
+                        values_str = entry[3]
+                        codes = values_str[7:]  # Remove "values=" prefix
+                        # Split by pipe, sort, and create normalized representation
+                        code_list = [c.strip() for c in codes.split("|")]
+                        # Use sorted tuple as hashable unique identifier
+                        normalized = tuple(sorted(code_list))
+                        inline_codelists.add(normalized)
+                    else:
+                        codelist_ids.add(codelist_id)
 
     return sorted(codelist_ids), sorted(inline_codelists)
 
@@ -436,7 +443,7 @@ def is_icd10_code(code):
 
 
 def load_ehrql_codelists_to_repos():
-    """Load ehrql_codelists.json and map codelists to repos that use them.
+    """Map used and unused codelists in ehrql_codelists.json to repositories.
 
     Returns:
         Dict of {codelist_id: set(repos)}
@@ -461,17 +468,11 @@ def load_ehrql_codelists_to_repos():
         # Get repos that use this file hash
         repos_for_hash = file_hash_to_repos.get(file_hash, set())
 
-        for file_name, variables in files.items():
-            if file_name == "_unused_codelists":
-                continue
-            for _, codelist_list in variables.items():
-                # codelist_list is a list of entries, each starting with codelist_id
-                for entry in codelist_list:
-                    if entry and len(entry) > 0:
-                        codelist_id = entry[0]
-                        if codelist_id and codelist_id != "<inline>":
-                            # Add all repos that use this file hash
-                            codelist_to_repos[codelist_id].update(repos_for_hash)
+        for entry in _iter_signature_codelist_entries(files):
+            if entry and len(entry) > 0:
+                codelist_id = entry[0]
+                if codelist_id and codelist_id != "<inline>":
+                    codelist_to_repos[codelist_id].update(repos_for_hash)
 
     return codelist_to_repos
 
