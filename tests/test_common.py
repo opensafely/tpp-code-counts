@@ -264,7 +264,13 @@ def test_load_ehrql_codelists_to_repos(tmp_path, monkeypatch):
         "projects": {"opensafely/test-repo": {"main": "hash123"}},
         "signatures": {
             "hash123": {
-                "codelists.py": {"my_codelist": [["/user/test/codelist/abc123/"]]}
+                "codelists.py": {"my_codelist": [["/user/test/codelist/abc123/"]]},
+                "_unused_codelists": [
+                    [
+                        "/user/test/unused/def456/",
+                        "file=codelists/user-test-unused.csv",
+                    ]
+                ],
             }
         },
     }
@@ -276,4 +282,9 @@ def test_load_ehrql_codelists_to_repos(tmp_path, monkeypatch):
 
     assert "/user/test/codelist/abc123/" in result
     assert "opensafely/test-repo" in result["/user/test/codelist/abc123/"]
-    assert "opensafely/test-repo" in result["/user/test/codelist/abc123/"]
+    assert "/user/test/unused/def456/" in result
+    assert "opensafely/test-repo" in result["/user/test/unused/def456/"]
+
+    codelist_ids, _ = common.extract_codelist_ids()
+    assert "/user/test/codelist/abc123/" in codelist_ids
+    assert "/user/test/unused/def456/" in codelist_ids

@@ -82,6 +82,9 @@ def mock_extended_data(tmp_path, monkeypatch):
     monkeypatch.setattr(apm, "OUTPUT_CSV", out_dir / "prefix_matching_analysis.csv")
     monkeypatch.setattr(apm, "OUTPUT_MD", out_dir / "prefix_matching_analysis.md")
     monkeypatch.setattr(apm, "REPOS_OUTPUT_FILE", out_dir / "prefix_matching_repos.csv")
+    monkeypatch.setattr(
+        apm, "PREFIX_DETAILS_FILE", out_dir / "prefix_matching_details.json"
+    )
 
     return {"data_dir": data_dir, "out_dir": out_dir}
 

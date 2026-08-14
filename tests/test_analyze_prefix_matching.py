@@ -54,6 +54,9 @@ def mock_prefix_matching_data(tmp_path, monkeypatch):
     monkeypatch.setattr(apm, "OUTPUT_CSV", out_dir / "prefix_matching_analysis.csv")
     monkeypatch.setattr(apm, "OUTPUT_MD", out_dir / "prefix_matching_analysis.md")
     monkeypatch.setattr(apm, "REPOS_OUTPUT_FILE", out_dir / "prefix_matching_repos.csv")
+    monkeypatch.setattr(
+        apm, "PREFIX_DETAILS_FILE", out_dir / "prefix_matching_details.json"
+    )
 
     return {
         "data_dir": data_dir,
@@ -200,3 +203,41 @@ def test_map_to_repos_creates_output(mock_prefix_matching_data):
         assert "repo" in reader.fieldnames
         assert "codelist" in reader.fieldnames
         assert "current_event_count" in reader.fieldnames
+
+
+def test_prefix_matching_code_details_separate_x_padding(monkeypatch):
+    rows = [
+        {
+            "codelist_id": "test",
+            "icd10_code": "I64",
+            "status": "COMPLETE",
+            "apcs_primary_count": "100",
+            "apcs_secondary_count": "0",
+            "apcs_all_count": "150",
+        },
+        {
+            "codelist_id": "test",
+            "icd10_code": "I64X",
+            "status": "EXTRA",
+            "apcs_primary_count": "20",
+            "apcs_secondary_count": "0",
+            "apcs_all_count": "40",
+        },
+        {
+            "codelist_id": "test",
+            "icd10_code": "I6400",
+            "status": "EXTRA",
+            "apcs_primary_count": "30",
+            "apcs_secondary_count": "0",
+            "apcs_all_count": "60",
+        },
+    ]
+    monkeypatch.setattr(apm, "get_apcs_coverage_data", lambda: (rows, {}))
+
+    assert apm.get_prefix_matching_code_details("test") == {
+        "x_padded_codes": ["I64"],
+        "modifier_codes": ["I6400"],
+        "baseline_all": 150,
+        "with_x_padding_all": 190,
+        "with_prefix_matching_all": 250,
+    }
