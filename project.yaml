@@ -24,7 +24,7 @@ actions:
         log: output/icd10_ons_deaths_log.json
 
   validate_output:
-    run: python:latest python analysis/validate_output.py
+    run: python:v2 python analysis/validate_output.py
     needs:
       - icd10_apcs
       - icd10_ons_deaths
